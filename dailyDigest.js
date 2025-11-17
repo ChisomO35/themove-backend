@@ -11,9 +11,7 @@ const BASE_URL = process.env.PUBLIC_APP_URL || "https://api.usethemove.com";
 
 // --- Initialize Firebase ---
 if (!admin.apps.length) {
-  const serviceAccount = JSON.parse(
-    fs.readFileSync("./firebase-service-account.json", "utf-8")
-  );
+  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
   admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 }
 
