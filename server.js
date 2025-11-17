@@ -9,7 +9,11 @@ const cloudinary = require("cloudinary").v2;
 const admin = require("firebase-admin");
 const { Pinecone } = require("@pinecone-database/pinecone");
 
-dotenv.config();
+console.log("🚀 OPENAI KEY?:", process.env.OPENAI_API_KEY ? "YES" : "NO");
+
+if (process.env.NODE_ENV !== "production") {
+  require("dotenv").config();
+}
 
 const app = express();
 app.use(cors());
