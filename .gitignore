@@ -1,0 +1,25 @@
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+
+# Firebase service account
+*.json
+!package.json
+
+# Node dependencies
+node_modules/
+
+# Build outputs
+dist/
+.build/
+.vercel/
+.next/
+
+# OS junk
+.DS_Store
+
+node_modules
+uploads
+firebase-service-account.json
