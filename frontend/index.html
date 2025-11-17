@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TheMove - Campus Discovery Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Poppins", "sans-serif"] },
+            colors: {
+              primary: "#4F46E5",
+              accent: "#6366F1",
+              background: "#FAFAFA",
+              dark: "#1E1B4B",
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="bg-background text-gray-800 font-sans flex flex-col min-h-screen">
+    <!-- ✅ Navbar -->
+    <header class="flex justify-between items-center px-6 py-4 bg-white shadow-sm sticky top-0 z-50">
+  <!-- Logo links to home -->
+  <a href="/index.html" class="text-2xl font-bold text-primary tracking-tight hover:text-indigo-700 transition">
+    TheMove
+  </a>
+
+  <nav class="flex items-center gap-5 text-sm font-medium">
+    <a href="#features" class="hover:text-primary transition">Features</a>
+    <a href="#how" class="hover:text-primary transition">How It Works</a>
+    <a href="#faq" class="hover:text-primary transition">FAQ</a>
+
+    <!-- New Login Button -->
+    <a
+      href="/login.html"
+      class="text-primary border border-primary px-4 py-2 rounded-xl hover:bg-indigo-50 transition"
+    >
+      Login
+    </a>
+
+    <!-- Existing Join Button -->
+    <a
+      href="/signup.html"
+      class="bg-primary text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition"
+    >
+      Join
+    </a>
+  </nav>
+</header>
+
+    <!-- ✅ Hero Section -->
+    <section class="flex flex-col items-center text-center px-6 py-20 bg-gradient-to-br from-indigo-50 to-white">
+      <h2 class="text-4xl sm:text-5xl font-extrabold text-dark mb-4 leading-tight">
+        Your Campus in One Text 📱
+      </h2>
+      <p class="text-gray-600 max-w-2xl mb-8 text-lg">
+        TheMove is an AI-powered number that helps you discover events, clubs, and opportunities
+        on campus — all through simple text messages.
+      </p>
+
+      <div class="bg-white shadow-md rounded-2xl px-8 py-5 mb-8 border border-indigo-100">
+        <p class="text-xl font-semibold text-primary mb-1">
+          Text <span class="text-dark">+1 (555) 123-MOVE</span>
+        </p>
+        <p class="text-gray-600 text-sm">
+          Try: “What’s happening at UNC tonight?” or “How can I volunteer on campus?”
+        </p>
+      </div>
+
+      <div class="flex flex-wrap gap-4 justify-center">
+        <a
+          href="#how"
+          class="bg-primary text-white px-6 py-3 rounded-xl font-medium hover:bg-indigo-700 transition shadow-md"
+        >
+          See How It Works
+        </a>
+        <a
+          href="#features"
+          class="border border-primary text-primary px-6 py-3 rounded-xl font-medium hover:bg-indigo-50 transition"
+        >
+          Explore Features
+        </a>
+      </div>
+    </section>
+
+    <!-- ✅ Features Section -->
+    <section id="features" class="py-16 px-6 max-w-6xl mx-auto text-center">
+      <h3 class="text-3xl font-semibold text-dark mb-10">
+        What You Can Do With TheMove 💡
+      </h3>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div class="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition">
+          <h4 class="text-xl font-semibold text-primary mb-2">🔍 Search by Text</h4>
+          <p class="text-gray-600">
+            Want to find something? Just text what you’re looking for — from “Poker nights” to
+            “Volunteer opportunities.” Our AI finds matches instantly.
+          </p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition">
+          <h4 class="text-xl font-semibold text-primary mb-2">📬 Daily Digest</h4>
+          <p class="text-gray-600">
+            Sign up to receive a personalized daily text with events that match your interests
+            and campus. Delivered fresh every morning.
+          </p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition">
+          <h4 class="text-xl font-semibold text-primary mb-2">🎯 Personalized Feed</h4>
+          <p class="text-gray-600">
+            Create your profile once — your dorm, interests, and organizations — and TheMove will
+            tailor future event suggestions around you.
+          </p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition">
+          <h4 class="text-xl font-semibold text-primary mb-2">🤝 Built for Students</h4>
+          <p class="text-gray-600">
+            Whether you’re a first-year or a senior, TheMove helps you connect with your campus
+            community — fast, simple, and fun.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ✅ How It Works -->
+    <section id="how" class="py-20 bg-indigo-50 text-center">
+      <h3 class="text-3xl font-semibold text-dark mb-12">How It Works 🚀</h3>
+      <div class="grid sm:grid-cols-3 gap-10 max-w-5xl mx-auto">
+        <div>
+          <div class="text-4xl font-bold text-primary mb-2">1</div>
+          <h4 class="font-semibold mb-2">Text TheMove</h4>
+          <p class="text-gray-600">
+            Send a message to <span class="font-semibold text-dark">+1 (555) 123-MOVE</span>.
+            No app, no download — just text.
+          </p>
+        </div>
+        <div>
+          <div class="text-4xl font-bold text-primary mb-2">2</div>
+          <h4 class="font-semibold mb-2">Create Your Profile</h4>
+          <p class="text-gray-600">
+            Sign up once with your name, dorm, and interests to unlock personalized digests and
+            tailored event recommendations.
+          </p>
+        </div>
+        <div>
+          <div class="text-4xl font-bold text-primary mb-2">3</div>
+          <h4 class="font-semibold mb-2">Discover & Stay Updated</h4>
+          <p class="text-gray-600">
+            Text TheMove anytime to search for events — and get your customized daily digest sent
+            right to your phone.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ✅ Testimonials -->
+    <section id="testimonials" class="py-16 px-6 max-w-5xl mx-auto text-center">
+      <h3 class="text-3xl font-semibold text-dark mb-10">What Students Are Saying 💬</h3>
+      <div class="grid sm:grid-cols-3 gap-8">
+        <div class="bg-white p-6 rounded-2xl shadow-md">
+          <p class="text-gray-700 italic mb-3">
+            “I don’t even open GroupMe anymore — I just text TheMove when I’m bored.”
+          </p>
+          <h4 class="font-semibold text-primary">— Maya, UNC</h4>
+        </div>
+        <div class="bg-white p-6 rounded-2xl shadow-md">
+          <p class="text-gray-700 italic mb-3">
+            “My daily digest actually makes me go to things I’d never have found otherwise.”
+          </p>
+          <h4 class="font-semibold text-primary">— Lauren, UNC</h4>
+        </div>
+        <div class="bg-white p-6 rounded-2xl shadow-md">
+          <p class="text-gray-700 italic mb-3">
+            “It feels like having a friend who knows everything happening on campus.”
+          </p>
+          <h4 class="font-semibold text-primary">— Shailey, UNC</h4>
+        </div>
+      </div>
+    </section>
+
+    <!-- ✅ FAQ Section -->
+    <section id="faq" class="py-20 px-6 bg-white max-w-4xl mx-auto">
+      <h3 class="text-3xl font-semibold text-center text-dark mb-10">Frequently Asked Questions ❓</h3>
+
+      <div class="space-y-4 text-left">
+        <details class="bg-indigo-50 border border-indigo-100 rounded-xl p-5">
+          <summary class="font-semibold text-primary cursor-pointer">
+            Do I need an account to use TheMove?
+          </summary>
+          <p class="mt-2 text-gray-600">
+            You can text TheMove up to <span class="font-semibold text-dark">three times without an account</span>
+            to explore what’s happening on campus — no sign-up required.  
+            After that, you’ll need to create an account to keep searching and to unlock personalized
+            daily digests based on your interests.
+          </p>
+        </details>
+
+        <details class="bg-indigo-50 border border-indigo-100 rounded-xl p-5">
+          <summary class="font-semibold text-primary cursor-pointer">
+            How do I get my daily digest?
+          </summary>
+          <p class="mt-2 text-gray-600">
+            Once you’ve signed up and added your interests, TheMove will automatically send a
+            morning text with curated events and opportunities that match you.
+          </p>
+        </details>
+
+        <details class="bg-indigo-50 border border-indigo-100 rounded-xl p-5">
+          <summary class="font-semibold text-primary cursor-pointer">
+            Is it free to use?
+          </summary>
+          <p class="mt-2 text-gray-600">
+            Yes! TheMove is completely free for students.
+          </p>
+        </details>
+
+        <details class="bg-indigo-50 border border-indigo-100 rounded-xl p-5">
+          <summary class="font-semibold text-primary cursor-pointer">
+            What kinds of things can I search for?
+          </summary>
+          <p class="mt-2 text-gray-600">
+            You can search anything — “career fairs,” “open mics,” “volunteer work,” or “where’s
+            free food tonight.” TheMove’s AI will find events across your campus community.
+          </p>
+        </details>
+      </div>
+    </section>
+
+    <!-- ✅ CTA -->
+    <section class="py-16 bg-primary text-white text-center">
+      <h3 class="text-3xl font-semibold mb-4">Ready to Discover Your Campus?</h3>
+      <p class="text-indigo-100 mb-8">
+        Text <span class="font-semibold">+1 (555) 123-MOVE</span> to start exploring now.
+        <br />Want a personalized daily digest?
+        <a href="/signup.html" class="underline font-semibold">Create an account</a>.
+      </p>
+      <a
+        href="/signup.html"
+        class="bg-white text-primary px-8 py-3 rounded-xl font-medium hover:bg-indigo-100 transition"
+      >
+        Sign Up Free
+      </a>
+    </section>
+
+    <!-- ✅ Footer -->
+    <footer class="bg-white py-8 text-center text-gray-500 text-sm border-t">
+      <div class="mb-3">
+        <span class="font-semibold text-primary">TheMove</span> — Your AI Campus Discovery Platform
+      </div>
+      <p>© 2025 TheMove. Made with 🩵 at UNC.</p>
+    </footer>
+  </body>
+</html>

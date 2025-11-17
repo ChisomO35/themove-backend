@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TheMove - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Poppins", "sans-serif"] },
+            colors: {
+              primary: "#4F46E5",
+              accent: "#3B82F6",
+              background: "#FAFAFA",
+              dark: "#1E1B4B",
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="bg-background font-sans text-gray-800 flex flex-col min-h-screen">
+    <!-- ✅ Navbar -->
+    <header
+      class="flex justify-between items-center px-6 py-4 bg-white shadow-md"
+    >
+      <a href="/index.html" class="text-2xl font-bold text-primary tracking-tight hover:text-indigo-700 transition">
+    TheMove
+  </a>
+      <nav class="flex items-center gap-4">
+        <a href="/login.html" class="text-gray-600 hover:text-primary font-medium"
+          >Login</a
+        >
+        <a
+          href="/signup.html"
+          class="bg-primary text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition"
+          >Join</a
+        >
+      </nav>
+    </header>
+
+    <!-- ✅ Main Content -->
+    <main
+      class="flex flex-col justify-center flex-grow mx-auto w-full max-w-md px-6 py-10 gap-4"
+    >
+      <h2 class="text-3xl font-semibold text-center text-dark mb-6">
+        Login to TheMove
+      </h2>
+
+      <input
+        id="email"
+        placeholder="Email"
+        class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none"
+      />
+
+      <input
+        id="password"
+        type="password"
+        placeholder="Password"
+        class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none"
+      />
+
+      <button
+        id="email-login-button"
+        class="bg-primary text-white w-full py-2.5 rounded-xl font-medium mt-2 hover:bg-indigo-700 transition shadow-md hover:shadow-lg"
+      >
+        Login
+      </button>
+
+      <p class="text-center text-sm text-gray-600 mt-3">
+        <a href="#" id="forgot-password-link" class="text-primary hover:underline">
+          Forgot your password?
+        </a>
+      </p>
+
+      <p class="text-center text-sm text-gray-600 mt-1">
+        New here?
+        <a href="/signup.html" class="text-primary hover:underline">Create an account</a>
+      </p>
+    </main>
+
+    <!-- ✅ Footer -->
+    <footer class="mt-auto text-center py-6 text-gray-500 text-sm">
+      © 2025 TheMove • Made with 🩵 at UNC
+    </footer>
+
+    <!-- ✅ Toast Notification -->
+    <div
+      id="toast"
+      class="fixed top-5 left-1/2 -translate-x-1/2 bg-white shadow-lg rounded-xl px-5 py-3 text-gray-800 font-medium border border-gray-200 opacity-0 pointer-events-none transition-all duration-300 z-50"
+    ></div>
+
+    <!-- ✅ Password Reset Modal -->
+    <div id="reset-modal" class="fixed inset-0 hidden items-center justify-center bg-black/50 z-50">
+      <div class="bg-white rounded-xl p-6 w-80 shadow-lg text-center">
+        <h3 class="text-lg font-semibold text-dark mb-2">Reset Password</h3>
+        <p class="text-sm text-gray-600 mb-4">Enter your @unc.edu email below:</p>
+        <input
+          id="reset-email"
+          placeholder="School Email"
+          class="border border-gray-300 rounded-xl px-3 py-2 w-full focus:ring-2 focus:ring-primary outline-none mb-4"
+        />
+        <div class="flex justify-end gap-2">
+          <button id="cancel-reset" class="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100">
+            Cancel
+          </button>
+          <button
+            id="confirm-reset"
+            class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ✅ Toast + Modal Logic -->
+    <script>
+      function showToast(message, type = "info") {
+        const toast = document.getElementById("toast");
+        const colors = {
+          info: "border-gray-300",
+          success: "border-green-400 bg-green-50 text-green-700",
+          error: "border-red-400 bg-red-50 text-red-700",
+          warning: "border-yellow-400 bg-yellow-50 text-yellow-700",
+        };
+        toast.className = `fixed top-5 left-1/2 -translate-x-1/2 rounded-xl px-5 py-3 font-medium text-center shadow-lg transition-all duration-300 z-50 ${colors[type]}`;
+        toast.textContent = message;
+        toast.style.opacity = "1";
+        toast.style.pointerEvents = "auto";
+        setTimeout(() => {
+          toast.style.opacity = "0";
+          toast.style.pointerEvents = "none";
+        }, 3000);
+      }
+    </script>
+
+    <!-- ✅ Firebase Logic -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+      import {
+        getAuth,
+        signInWithEmailAndPassword,
+        setPersistence,
+        browserLocalPersistence,
+        sendPasswordResetEmail,
+      } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyDuHcTFbqy9e0nov4eKHNTp89WVcQOrlTQ",
+        authDomain: "themove-c75d3.firebaseapp.com",
+        projectId: "themove-c75d3",
+        storageBucket: "themove-c75d3.firebasestorage.app",
+        messagingSenderId: "445376886249",
+        appId: "1:445376886249:web:662ed2bb984ce230a14778",
+        measurementId: "G-7E1HKLYXR0",
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      auth.useDeviceLanguage();
+      await setPersistence(auth, browserLocalPersistence);
+
+      async function handleEmailLogin() {
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value.trim();
+
+        if (!email || !password) {
+          showToast("⚠️ Enter both email and password.", "warning");
+          return;
+        }
+        if (!email.toLowerCase().endsWith("@unc.edu")) {
+          showToast("❌ Email must end with @unc.edu", "error");
+          return;
+        }
+
+        try {
+          const userCred = await signInWithEmailAndPassword(auth, email, password);
+          const user = userCred.user;
+          const idToken = await user.getIdToken(true);
+
+          if (!user.emailVerified) {
+            showToast("⚠️ Please verify your email, then log in again.", "warning");
+            await auth.signOut();
+            return;
+          }
+
+          await fetch("https://api.usethemove.com/syncEmailVerification", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${idToken}` },
+          });
+
+          const res = await fetch(`https://api.usethemove.com/checkUserSetup?uid=${user.uid}`, {
+            headers: { Authorization: `Bearer ${idToken}` },
+          });
+          const data = await res.json();
+
+          localStorage.setItem("uid", user.uid);
+
+          if (data.setupComplete) {
+            showToast("✅ Welcome back!", "success");
+            setTimeout(() => (window.location.href = "/profile.html"), 1500);
+          } else {
+            showToast("📝 Please complete your profile setup.", "info");
+            setTimeout(() => (window.location.href = "/setup.html"), 1500);
+          }
+        } catch (err) {
+          console.error("❌ Email login error:", err);
+          showToast("Invalid email or password. Please try again.", "error");
+        }
+      }
+
+      document
+        .getElementById("email-login-button")
+        .addEventListener("click", handleEmailLogin);
+
+      // ✅ Password Reset Modal Behavior
+      const modal = document.getElementById("reset-modal");
+      const cancelBtn = document.getElementById("cancel-reset");
+      const confirmBtn = document.getElementById("confirm-reset");
+
+      document.getElementById("forgot-password-link").addEventListener("click", (e) => {
+        e.preventDefault();
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+      });
+
+      cancelBtn.addEventListener("click", () => {
+        modal.classList.add("hidden");
+      });
+
+      confirmBtn.addEventListener("click", async () => {
+        const email = document.getElementById("reset-email").value.trim();
+        if (!email) {
+          showToast("⚠️ Enter your email first.", "warning");
+          return;
+        }
+        if (!email.toLowerCase().endsWith("@unc.edu")) {
+          showToast("❌ Email must end with @unc.edu", "error");
+          return;
+        }
+
+        try {
+          await sendPasswordResetEmail(auth, email);
+          showToast("📬 Password reset email sent! Check your inbox.", "success");
+          modal.classList.add("hidden");
+        } catch (err) {
+          console.error("❌ Password reset failed:", err);
+          showToast("Something went wrong. Try again later.", "error");
+        }
+      });
+    </script>
+  </body>
+</html>

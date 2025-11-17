@@ -20,6 +20,8 @@ dist/
 # OS junk
 .DS_Store
 
-node_modules
-uploads
+# Uploads directory
+uploads/
+
+# Firebase service account (specific)
 firebase-service-account.json

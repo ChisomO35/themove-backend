@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TheMove Chat</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    body {
+      background: #fafafa;
+      font-family: "Poppins", sans-serif;
+    }
+
+    .bubble-user {
+      background: #4f46e5;
+      color: white;
+      border-radius: 14px 14px 0 14px;
+      padding: 12px 16px;
+      max-width: 80%;
+      margin-left: auto;
+      margin-bottom: 10px;
+    }
+
+    .bubble-bot {
+      background: white;
+      border-radius: 14px 14px 14px 0;
+      padding: 12px 16px;
+      max-width: 80%;
+      margin-right: auto;
+      margin-bottom: 10px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .typing {
+      animation: blink 1s infinite;
+      opacity: 0.6;
+    }
+
+    @keyframes blink {
+      0% { opacity: .2 }
+      50% { opacity: 1 }
+      100% { opacity: .2 }
+    }
+  </style>
+</head>
+
+<body class="flex flex-col h-screen">
+
+  <!-- Header -->
+  <header class="bg-white px-6 py-4 shadow flex justify-between items-center">
+    <h1 class="text-xl font-semibold text-indigo-700">TheMove Chat</h1>
+    <a href="/index.html" class="text-gray-600 hover:text-indigo-600 font-medium">Home</a>
+  </header>
+
+  <!-- Chat window -->
+  <main id="chatWindow" class="flex-1 overflow-y-auto px-4 py-6 space-y-2"></main>
+
+  <!-- Input bar -->
+  <footer class="p-4 bg-white shadow flex items-center gap-3">
+    <input
+      id="chatInput"
+      type="text"
+      placeholder="Ask about events…"
+      class="flex-1 border rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-600 outline-none"
+    />
+    <button
+      onclick="sendMessage()"
+      class="bg-indigo-600 text-white px-4 py-3 rounded-xl font-medium hover:bg-indigo-700"
+    >
+      Send
+    </button>
+  </footer>
+
+  <!-- UPDATED chat.js LOGIC -->
+  <script>
+    const chatWindow = document.getElementById("chatWindow");
+    const input = document.getElementById("chatInput");
+
+    function addMessage(text, sender) {
+      const bubble = document.createElement("div");
+      bubble.className = sender === "user" ? "bubble-user" : "bubble-bot";
+
+      // ⭐️ Allow HTML + clickable links + line breaks
+      bubble.innerHTML = text.replace(/\n/g, "<br>");
+
+      chatWindow.appendChild(bubble);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const text = input.value.trim();
+      if (!text) return;
+
+      addMessage(text, "user");
+      input.value = "";
+
+      // show typing dots
+      const typing = document.createElement("div");
+      typing.className = "bubble-bot typing";
+      typing.innerHTML = "•••";
+      chatWindow.appendChild(typing);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+
+      // send request to backend
+      const res = await fetch("https://api.usethemove.com/chatJSON", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+
+      const data = await res.json();
+
+      // remove typing bubble
+      typing.remove();
+
+      // bot message (HTML supported)
+      addMessage(data.reply, "bot");
+    }
+  </script>
+
+</body>
+</html>

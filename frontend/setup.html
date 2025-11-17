@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TheMove - Complete Your Profile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Poppins", "sans-serif"] },
+            colors: {
+              primary: "#4F46E5",
+              accent: "#3B82F6",
+              background: "#FAFAFA",
+              dark: "#1E1B4B",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      .tag {
+        border: 1px solid #d1d5db;
+        border-radius: 9999px;
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #374151;
+        background-color: #fff;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+      }
+
+      .tag:hover {
+        background-color: #eef2ff;
+        border-color: #a5b4fc;
+        color: #4f46e5;
+      }
+
+      .tag.bg-primary {
+        background-color: #4f46e5;
+        color: white;
+        border-color: #4f46e5;
+      }
+
+      .tag.bg-primary:hover {
+        background-color: #4338ca;
+        border-color: #4338ca;
+        color: white;
+      }
+
+      .category-section {
+        @apply border-t border-gray-200 pt-6 mt-6;
+      }
+    </style>
+  </head>
+
+  <body class="bg-background font-sans text-gray-800 flex flex-col min-h-screen">
+    <!-- ✅ Navbar -->
+    <header class="flex justify-between items-center px-6 py-4 bg-white shadow-md">
+      <a href="/index.html" class="text-2xl font-bold text-primary tracking-tight hover:text-indigo-700 transition">
+    TheMove
+  </a>
+      <nav class="flex items-center gap-4">
+        <a href="/login.html" class="text-gray-600 hover:text-primary font-medium">Login</a>
+        <a
+          href="/signup.html"
+          class="bg-primary text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition"
+          >Join</a
+        >
+      </nav>
+    </header>
+
+    <!-- ✅ Main Content -->
+    <main class="flex-grow flex justify-center px-4 py-10">
+      <div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+        <h2 class="text-3xl font-semibold text-center text-dark mb-2">
+          🎯 Complete Your Profile
+        </h2>
+        <p class="text-center text-gray-500 mb-8">
+          Customize your campus experience.
+        </p>
+
+        <div class="space-y-8">
+          <!-- Phone Section -->
+          <div>
+            <label class="block font-medium mb-2">Phone Number (for event updates)</label>
+            <div class="flex gap-2">
+              <input
+                id="phone"
+                placeholder="+1 234 567 8901"
+                class="border border-gray-300 rounded-xl px-4 py-2 flex-grow focus:ring-2 focus:ring-primary outline-none"
+              />
+              <button
+                id="verify-phone-button"
+                onclick="verifyPhoneNumber()"
+                class="bg-primary text-white px-4 rounded-xl hover:bg-indigo-700 transition"
+              >
+                Verify
+              </button>
+            </div>
+          </div>
+
+          <!-- Dorm -->
+          <div>
+            <label class="block font-medium mb-2">Dorm / Residence</label>
+            <select
+              id="dorm"
+              class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none"
+            >
+              <option value="">Select your dorm</option>
+              <option>Alderman</option><option>Alexander</option><option>Avery</option>
+              <option>Carmichael</option><option>Cobb</option><option>Connor</option>
+              <option>Craige</option><option>Craige North</option><option>Ehringhaus</option>
+              <option>Everett</option><option>Graham</option><option>Grimes</option>
+              <option>Hardin</option><option>Hinton James</option><option>Horton</option>
+              <option>Joyner</option><option>Kenan</option><option>Koury</option>
+              <option>Lewis</option><option>Mangum</option><option>Manly</option>
+              <option>McClinton</option><option>McIver</option><option>Morrison</option>
+              <option>Old East</option><option>Old West</option><option>Parker</option>
+              <option>Ram Village</option><option>Ruffin Jr.</option><option>Spencer</option>
+              <option>Stacy</option><option>Taylor</option><option>Teague</option>
+              <option>Winston</option><option>Off-Campus</option>
+            </select>
+          </div>
+
+          <!-- Interests -->
+          <div class="mt-8">
+            <h3 class="text-xl font-semibold text-dark mb-2 flex items-center gap-1">
+              💜 Tell us what you love
+            </h3>
+            <p class="text-gray-500 mb-6">Select all that match your interests.</p>
+
+            <div class="space-y-8">
+              <!-- Each category section with border + spacing -->
+              <div class="category-section">
+                <h3 class="font-semibold text-lg mb-3">🎶 Music</h3>
+                <div class="flex flex-wrap gap-2">
+                  <div class="tag">Alternative</div><div class="tag">Hip Hop / Rap</div><div class="tag">R&B</div>
+                  <div class="tag">Pop</div><div class="tag">Indie</div><div class="tag">EDM / Electronic</div>
+                  <div class="tag">Cultural</div><div class="tag">Jazz</div><div class="tag">Country</div>
+                  <div class="tag">Rock</div><div class="tag">Latin</div><div class="tag">Folk</div>
+                  <div class="tag">Singer/Songwriter</div><div class="tag">Classical</div><div class="tag">Other</div>
+                </div>
+              </div>
+
+              <div class="category-section">
+                <h3 class="font-semibold text-lg mb-3">🏐 Sports & Fitness</h3>
+                <div class="flex flex-wrap gap-2">
+                  <div class="tag">Basketball</div><div class="tag">Soccer</div><div class="tag">Volleyball</div>
+                  <div class="tag">Tennis</div><div class="tag">Running</div><div class="tag">Weightlifting</div>
+                  <div class="tag">Yoga</div><div class="tag">Rugby</div><div class="tag">Swimming</div>
+                  <div class="tag">Intramurals</div><div class="tag">Fitness & Training</div><div class="tag">Cheer/Dance</div>
+                  <div class="tag">Other</div>
+                </div>
+              </div>
+
+              <div class="category-section">
+                <h3 class="font-semibold text-lg mb-3">🎨 Arts & Culture</h3>
+                <div class="flex flex-wrap gap-2">
+                  <div class="tag">Theatre</div><div class="tag">Dance</div><div class="tag">Visual Arts</div>
+                  <div class="tag">Photography</div><div class="tag">Creative Writing</div><div class="tag">Comedy</div>
+                  <div class="tag">Film</div><div class="tag">Music Performance</div><div class="tag">Fashion</div>
+                  <div class="tag">Other</div>
+                </div>
+              </div>
+
+              <div class="category-section">
+                <h3 class="font-semibold text-lg mb-3">💼 Business & Innovation</h3>
+                <div class="flex flex-wrap gap-2">
+                  <div class="tag">Startups & Entrepreneurship</div><div class="tag">Finance & Investment</div>
+                  <div class="tag">Marketing & Branding</div><div class="tag">Design</div>
+                  <div class="tag">Sustainability & Social Impact</div><div class="tag">Media</div>
+                  <div class="tag">Career Development</div><div class="tag">Nonprofit / NGOs</div><div class="tag">Other</div>
+                </div>
+              </div>
+
+              <div class="category-section">
+                <h3 class="font-semibold text-lg mb-3">🌿 Wellness & Health</h3>
+                <div class="flex flex-wrap gap-2">
+                  <div class="tag">Mental Health</div><div class="tag">Fitness & Nutrition</div>
+                  <div class="tag">Self-Care & Mindfulness</div><div class="tag">Medical / Health Science</div>
+                  <div class="tag">Other</div>
+                </div>
+              </div>
+
+              <div class="category-section">
+                <h3 class="font-semibold text-lg mb-3">💜 Charity & Causes</h3>
+                <div class="flex flex-wrap gap-2">
+                  <div class="tag">Animal Welfare</div><div class="tag">Environment</div><div class="tag">Healthcare</div>
+                  <div class="tag">Human Rights</div><div class="tag">Poverty & Inequality</div><div class="tag">Education</div>
+                  <div class="tag">International Aid</div><div class="tag">Disaster Relief</div><div class="tag">Community Service</div>
+                  <div class="tag">Other</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onclick="handleSubmit()"
+            class="bg-primary text-white w-full py-2.5 rounded-xl font-medium mt-10 hover:bg-indigo-700 transition shadow-md hover:shadow-lg"
+          >
+            Save Profile
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- ✅ Footer -->
+    <footer class="mt-auto text-center py-6 text-gray-500 text-sm">
+      © 2025 TheMove • Made with 🩵 at UNC
+    </footer>
+
+    <!-- ✅ Toast Notification -->
+    <div
+      id="toast"
+      class="fixed top-5 left-1/2 -translate-x-1/2 bg-white shadow-lg rounded-xl px-5 py-3 text-gray-800 font-medium border border-gray-200 opacity-0 pointer-events-none transition-all duration-300 z-50"
+    ></div>
+
+    <!-- ✅ Verification Code Modal -->
+    <div id="code-modal" class="fixed inset-0 hidden items-center justify-center bg-black/50 z-50">
+      <div class="bg-white rounded-xl p-6 w-80 shadow-lg text-center">
+        <h3 class="text-lg font-semibold text-dark mb-2">Verify Code</h3>
+        <p class="text-sm text-gray-600 mb-4">Enter the 6-digit verification code sent to your phone:</p>
+        <input
+          id="verification-code"
+          maxlength="6"
+          placeholder="123456"
+          class="border border-gray-300 rounded-xl px-3 py-2 w-full focus:ring-2 focus:ring-primary outline-none mb-4 text-center"
+        />
+        <div class="flex justify-end gap-2">
+          <button id="cancel-code" class="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100">
+            Cancel
+          </button>
+          <button id="confirm-code" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
+            Verify
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function showToast(message, type = "info") {
+        const toast = document.getElementById("toast");
+        const colors = {
+          info: "border-gray-300",
+          success: "border-green-400 bg-green-50 text-green-700",
+          error: "border-red-400 bg-red-50 text-red-700",
+          warning: "border-yellow-400 bg-yellow-50 text-yellow-700",
+        };
+        toast.className = `fixed top-5 left-1/2 -translate-x-1/2 rounded-xl px-5 py-3 font-medium text-center shadow-lg transition-all duration-300 z-50 ${colors[type]}`;
+        toast.textContent = message;
+        toast.style.opacity = "1";
+        toast.style.pointerEvents = "auto";
+        setTimeout(() => {
+          toast.style.opacity = "0";
+          toast.style.pointerEvents = "none";
+        }, 3000);
+      }
+    </script>
+
+    <!-- ✅ Firebase + Logic -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+      import {
+        getAuth,
+        onAuthStateChanged,
+        RecaptchaVerifier,
+        signInWithPhoneNumber,
+        linkWithCredential,
+        PhoneAuthProvider,
+      } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyDuHcTFbqy9e0nov4eKHNTp89WVcQOrlTQ",
+        authDomain: "themove-c75d3.firebaseapp.com",
+        projectId: "themove-c75d3",
+        storageBucket: "themove-c75d3.firebasestorage.app",
+        messagingSenderId: "445376886249",
+        appId: "1:445376886249:web:662ed2bb984ce230a14778",
+        measurementId: "G-7E1HKLYXR0",
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      auth.settings.appVerificationDisabledForTesting = true;
+
+      let currentUser = null;
+      let recaptchaVerifierInitialized = false;
+      let confirmationResult;
+
+      window.addEventListener("DOMContentLoaded", () => {
+        onAuthStateChanged(auth, (user) => {
+          if (user) {
+            currentUser = user;
+            if (!recaptchaVerifierInitialized) {
+              window.recaptchaVerifier = new RecaptchaVerifier(
+                auth,
+                "verify-phone-button",
+                { size: "invisible" }
+              );
+              recaptchaVerifierInitialized = true;
+            }
+          } else {
+            showToast("Please sign in first.", "warning");
+            window.location.href = "/login.html";
+          }
+        });
+      });
+
+      window.verifyPhoneNumber = async function () {
+        const phone = document.getElementById("phone").value.trim();
+        if (!phone) {
+          showToast("Please enter a valid phone number first.", "warning");
+          return;
+        }
+
+        try {
+          confirmationResult = await signInWithPhoneNumber(
+            auth,
+            phone,
+            window.recaptchaVerifier
+          );
+          showToast("📱 Verification code sent!", "info");
+          document.getElementById("code-modal").classList.remove("hidden");
+          document.getElementById("code-modal").classList.add("flex");
+        } catch (err) {
+          console.error(err);
+          showToast("Error sending code.", "error");
+        }
+      };
+
+      document.getElementById("cancel-code").addEventListener("click", () => {
+        document.getElementById("code-modal").classList.add("hidden");
+      });
+
+      document.getElementById("confirm-code").addEventListener("click", async () => {
+        const code = document.getElementById("verification-code").value.trim();
+        if (!code) {
+          showToast("Enter the verification code.", "warning");
+          return;
+        }
+        try {
+          const credential = PhoneAuthProvider.credential(
+            confirmationResult.verificationId,
+            code
+          );
+          await linkWithCredential(currentUser, credential);
+          showToast("✅ Phone verified successfully!", "success");
+          document.getElementById("code-modal").classList.add("hidden");
+        } catch (err) {
+          console.error(err);
+          showToast("Invalid code. Try again.", "error");
+        }
+      });
+
+      document.addEventListener("click", (e) => {
+        if (e.target.classList.contains("tag"))
+          e.target.classList.toggle("bg-primary");
+      });
+
+      window.handleSubmit = async function () {
+        const phone = document.getElementById("phone").value.trim();
+        const dorm = document.getElementById("dorm").value.trim();
+        const selectedTags = Array.from(document.querySelectorAll(".tag.bg-primary")).map(
+          (t) => t.textContent
+        );
+        const payload = { uid: currentUser.uid, phone, dorm, interests: selectedTags };
+
+        try {
+          const idToken = await currentUser.getIdToken(true);
+          const res = await fetch("https://api.usethemove.com/updateUser", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast("✅ Profile saved successfully!", "success");
+            setTimeout(() => (window.location.href = "/profile.html"), 2000);
+          } else showToast(data.message, "warning");
+        } catch (err) {
+          console.error(err);
+          showToast("Error updating profile.", "error");
+        }
+      };
+    </script>
+  </body>
+</html>

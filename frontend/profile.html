@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TheMove - Profile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Poppins", "sans-serif"] },
+            colors: {
+              primary: "#4F46E5",
+              accent: "#3B82F6",
+              background: "#FAFAFA",
+              dark: "#1E1B4B",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      .tag {
+        border: 1px solid #d1d5db;
+        border-radius: 9999px;
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #374151;
+        background-color: #fff;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+      }
+      .tag:hover {
+        background-color: #eef2ff;
+        border-color: #a5b4fc;
+        color: #4f46e5;
+      }
+      .tag.selected {
+        background-color: #4f46e5;
+        color: white;
+        border-color: #4f46e5;
+      }
+      .tag.selected:hover {
+        background-color: #4338ca;
+        border-color: #4338ca;
+      }
+
+      #delete-modal {
+        transition: opacity 0.25s ease, transform 0.25s ease;
+      }
+      #delete-modal.show {
+        opacity: 1;
+        transform: scale(1);
+      }
+      #delete-modal.hidden {
+        opacity: 0;
+        transform: scale(0.98);
+      }
+    </style>
+  </head>
+
+  <body class="bg-background font-sans text-gray-800 flex flex-col min-h-screen">
+    <!-- Navbar -->
+    <header class="flex justify-between items-center px-6 py-4 bg-white shadow-md">
+      <a href="/index.html" class="text-2xl font-bold text-primary tracking-tight hover:text-indigo-700 transition">
+        TheMove
+      </a>
+      <nav class="flex items-center gap-4">
+        <a href="/index.html" class="text-gray-600 hover:text-primary font-medium">Home</a>
+        <a
+          href="/login.html"
+          class="bg-primary text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition"
+        >
+          Logout
+        </a>
+      </nav>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-grow flex justify-center px-4 py-10">
+      <div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+        <h2 class="text-3xl font-semibold text-center text-dark mb-2">
+          👤 Your Profile
+        </h2>
+        <p class="text-center text-gray-500 mb-8">
+          View or update your campus info & interests.
+        </p>
+
+        <div class="space-y-6">
+
+          <!-- ⭐️ NEW DAILY DIGEST TOGGLE -->
+          <div class="pt-4 border-t border-gray-200">
+            <h3 class="text-xl font-semibold text-dark mb-3">📩 Notifications</h3>
+
+            <div class="flex items-center justify-between">
+              <label class="font-medium text-gray-800">Receive Daily Digest via SMS</label>
+              <input id="digestToggle" type="checkbox" class="w-6 h-6 cursor-pointer" />
+            </div>
+
+            <p id="digestDescription" class="mt-3 text-sm text-gray-500 hidden">
+              By opting in, you agree to receive 1 SMS per day from TheMove with personalized campus recommendations. Message and data rates may apply. Reply STOP to unsubscribe, HELP for help.
+              &nbsp; &nbsp;
+              <a href="https://docs.google.com/document/d/1vHUtMH1fnv-YZV8MBMxYnUJtdd0wI5FU4LK9fnEvIv4/edit?usp=sharing" target="_blank" class="text-primary underline hover:text-indigo-700">Privacy Policy
+              </a>
+              &nbsp;•&nbsp;
+              <a href="https://docs.google.com/document/d/1SQU9k9bEPzOAd6fJBm7LIaEE3TiX9CmUsHTMg5EigIE/edit?usp=sharing" target="_blank" class="text-primary underline hover:text-indigo-700">Terms of Service
+              </a>
+            </p>
+          </div>
+
+          <!-- Phone -->
+          <div>
+            <label class="block font-medium mb-2">Phone Number</label>
+            <input
+              id="phone"
+              placeholder="+1 234 567 8901"
+              class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none"
+              readonly
+            />
+          </div>
+
+          <!-- Dorm -->
+          <div>
+            <label class="block font-medium mb-2">Dorm / Residence</label>
+            <select
+              id="dorm"
+              class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none"
+            >
+              <option value="">Select your dorm</option>
+              <option>Alderman</option><option>Alexander</option><option>Avery</option>
+              <option>Carmichael</option><option>Cobb</option><option>Connor</option>
+              <option>Craige</option><option>Craige North</option><option>Ehringhaus</option>
+              <option>Everett</option><option>Graham</option><option>Grimes</option>
+              <option>Hardin</option><option>Hinton James</option><option>Horton</option>
+              <option>Joyner</option><option>Kenan</option><option>Koury</option>
+              <option>Lewis</option><option>Mangum</option><option>Manly</option>
+              <option>McClinton</option><option>McIver</option><option>Morrison</option>
+              <option>Old East</option><option>Old West</option><option>Parker</option>
+              <option>Ram Village</option><option>Ruffin Jr.</option><option>Spencer</option>
+              <option>Stacy</option><option>Taylor</option><option>Teague</option>
+              <option>Winston</option><option>Off-Campus</option>
+            </select>
+          </div>
+
+          <!-- Interests -->
+          <div class="mt-10">
+            <h3 class="text-xl font-semibold text-dark mb-2">💜 Your Interests</h3>
+            <p class="text-gray-500 mb-4">Click to toggle your interests.</p>
+
+            <div class="border-t border-gray-200 pt-4 space-y-8">
+              <!-- 🎶 Music -->
+              <div>
+                <h4 class="font-semibold text-lg mb-2 text-gray-700">🎶 Music</h4>
+                <div class="flex flex-wrap gap-2">
+                  <div class="tag">Alternative</div><div class="tag">Hip Hop / Rap</div><div class="tag">R&B</div><div class="tag">Pop</div><div class="tag">Indie</div><div class="tag">EDM / Electronic</div><div class="tag">Cultural</div><div class="tag">Jazz</div><div class="tag">Country</div><div class="tag">Rock</div><div class="tag">Latin</div><div class="tag">Folk</div><div class="tag">Singer/Songwriter</div><div class="tag">Classical</div><div class="tag">Other</div>
+                </div>
+              </div>
+
+              <!-- 🏐 Sports -->
+              <div>
+                <h4 class="font-semibold text-lg mb-2 text-gray-700">🏐 Sports & Fitness</h4>
+                <div class="flex flex-wrap gap-2">
+                  <div class="tag">Basketball</div><div class="tag">Soccer</div><div class="tag">Volleyball</div><div class="tag">Tennis</div><div class="tag">Running</div><div class="tag">Weightlifting</div><div class="tag">Yoga</div><div class="tag">Rugby</div><div class="tag">Swimming</div><div class="tag">Intramurals</div><div class="tag">Fitness & Training</div><div class="tag">Cheer/Dance</div><div class="tag">Other</div>
+                </div>
+              </div>
+
+              <!-- 🎨 Arts -->
+              <div>
+                <h4 class="font-semibold text-lg mb-2 text-gray-700">🎨 Arts & Culture</h4>
+                <div class="flex flex-wrap gap-2">
+                  <div class="tag">Theatre</div><div class="tag">Dance</div><div class="tag">Visual Arts</div><div class="tag">Photography</div><div class="tag">Creative Writing</div><div class="tag">Comedy</div><div class="tag">Film</div><div class="tag">Music Performance</div><div class="tag">Fashion</div><div class="tag">Other</div>
+                </div>
+              </div>
+
+              <!-- 💼 Business -->
+              <div>
+                <h4 class="font-semibold text-lg mb-2 text-gray-700">💼 Business & Innovation</h4>
+                <div class="flex flex-wrap gap-2">
+                  <div class="tag">Startups & Entrepreneurship</div><div class="tag">Finance & Investment</div><div class="tag">Marketing & Branding</div><div class="tag">Design</div><div class="tag">Sustainability & Social Impact</div><div class="tag">Media</div><div class="tag">Career Development</div><div class="tag">Nonprofit / NGOs</div><div class="tag">Other</div>
+                </div>
+              </div>
+
+              <!-- 🌿 Wellness -->
+              <div>
+                <h4 class="font-semibold text-lg mb-2 text-gray-700">🌿 Wellness & Health</h4>
+                <div class="flex flex-wrap gap-2">
+                  <div class="tag">Mental Health</div><div class="tag">Fitness & Nutrition</div><div class="tag">Self-Care & Mindfulness</div><div class="tag">Medical / Health Science</div><div class="tag">Other</div>
+                </div>
+              </div>
+
+              <!-- 💜 Charity -->
+              <div>
+                <h4 class="font-semibold text-lg mb-2 text-gray-700">💜 Charity & Causes</h4>
+                <div class="flex flex-wrap gap-2">
+                  <div class="tag">Animal Welfare</div><div class="tag">Environment</div><div class="tag">Healthcare</div><div class="tag">Human Rights</div><div class="tag">Poverty & Inequality</div><div class="tag">Education</div><div class="tag">International Aid</div><div class="tag">Disaster Relief</div><div class="tag">Community Service</div><div class="tag">Other</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Buttons -->
+          <div class="space-y-3 pt-8 border-t border-gray-200">
+            <button
+              onclick="saveProfile()
+"
+              class="bg-primary text-white w-full py-2.5 rounded-xl font-medium hover:bg-indigo-700 transition shadow-md hover:shadow-lg"
+            >
+              Save Changes
+            </button>
+
+            <button
+              onclick="localStorage.clear(); window.location.href='/login.html';"
+              class="bg-gray-100 text-gray-700 w-full py-2.5 rounded-xl font-medium hover:bg-gray-200 transition"
+            >
+              Logout
+            </button>
+
+            <button
+              class="bg-red-500 text-white w-full py-2.5 rounded-xl font-medium hover:bg-red-600 transition"
+              onclick="deleteAccount()"
+            >
+              Delete Account
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="mt-auto text-center py-6 text-gray-500 text-sm">
+      © 2025 TheMove • Made with 🩵 at UNC
+    </footer>
+
+    <!-- Toast -->
+    <div
+      id="toast"
+      class="fixed top-5 left-1/2 -translate-x-1/2 bg-white shadow-lg rounded-xl px-5 py-3 text-gray-800 font-medium border border-gray-200 opacity-0 pointer-events-none transition-all duration-300 z-50"
+    ></div>
+
+    <!-- Delete Modal -->
+    <div
+      id="delete-modal"
+      class="fixed inset-0 flex items-center justify-center bg-black/50 z-50 opacity-0 hidden"
+    >
+      <div class="bg-white rounded-2xl p-6 w-80 shadow-lg text-center transform transition">
+        <h3 class="text-lg font-semibold text-dark mb-2">Delete Account?</h3>
+        <p class="text-sm text-gray-600 mb-4">
+          ⚠️ Are you sure you want to permanently delete your account? This cannot be undone.
+        </p>
+        <div class="flex justify-center gap-3">
+          <button
+            id="cancel-delete"
+            class="px-4 py-2 rounded-lg text-gray-700 bg-gray-100 hover:bg-gray-200"
+          >
+            Cancel
+          </button>
+          <button
+            id="confirm-delete"
+            class="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- JS -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+      import { getAuth } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyDuHcTFbqy9e0nov4eKHNTp89WVcQOrlTQ",
+        authDomain: "themove-c75d3.firebaseapp.com",
+        projectId: "themove-c75d3",
+        storageBucket: "themove-c75d3.firebasestorage.app",
+        messagingSenderId: "445376886249",
+        appId: "1:445376886249:web:662ed2bb984ce230a14778",
+        measurementId: "G-7E1HKLYXR0",
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+
+      function showToast(message, type = "info") {
+        const toast = document.getElementById("toast");
+        const styles = {
+          info: "border-gray-300 bg-white text-gray-800",
+          success: "border-green-400 bg-green-50 text-green-700",
+          error: "border-red-400 bg-red-50 text-red-700",
+          warning: "border-yellow-400 bg-yellow-50 text-yellow-700",
+        };
+        toast.className = `fixed top-5 left-1/2 -translate-x-1/2 rounded-xl px-5 py-3 font-medium text-center shadow-lg transition-all duration-300 z-50 ${styles[type]}`;
+        toast.textContent = message;
+        toast.style.opacity = "1";
+        toast.style.pointerEvents = "auto";
+        setTimeout(() => {
+          toast.style.opacity = "0";
+          toast.style.pointerEvents = "none";
+        }, 3000);
+      }
+
+      async function loadProfile() {
+        const uid = localStorage.getItem("uid");
+        if (!uid) {
+          showToast("Please log in first.", "warning");
+          window.location.href = "/login.html";
+          return;
+        }
+
+        try {
+          const res = await fetch(`https://api.usethemove.com/getUser/${uid}`);
+          if (!res.ok) return showToast("⚠️ Couldn't load your profile.", "error");
+
+          const user = await res.json();
+          document.getElementById("phone").value = user.phone || "";
+          document.getElementById("dorm").value = user.dorm || "";
+
+          const saved = new Set(user.interests || []);
+          document.querySelectorAll(".tag").forEach((tag) => {
+            if (saved.has(tag.textContent)) tag.classList.add("selected");
+          });
+
+          // ⭐️ NEW — load opt-in state
+          document.getElementById("digestToggle").checked = user.dailyDigestOptIn || false;
+          document
+            .getElementById("digestDescription")
+            .classList.toggle("hidden", !user.dailyDigestOptIn);
+
+        } catch {
+          showToast("⚠️ Error fetching profile data.", "error");
+        }
+      }
+
+      // Toggle disclosure visibility
+      document.addEventListener("change", (e) => {
+        if (e.target.id === "digestToggle") {
+          document
+            .getElementById("digestDescription")
+            .classList.toggle("hidden", !e.target.checked);
+        }
+      });
+
+      document.addEventListener("click", (e) => {
+        if (e.target.classList.contains("tag")) {
+          e.target.classList.toggle("selected");
+        }
+      });
+
+      async function saveProfile() {
+        const uid = localStorage.getItem("uid");
+        if (!uid) return showToast("Please log in first.", "warning");
+
+        const phone = document.getElementById("phone").value.trim();
+        const dorm = document.getElementById("dorm").value.trim();
+        const interests = Array.from(document.querySelectorAll(".tag.selected")).map(
+          (t) => t.textContent
+        );
+
+        const dailyDigestOptIn = document.getElementById("digestToggle").checked;
+
+        try {
+          const user = auth.currentUser;
+          if (!user) {
+            showToast("Session expired. Please log in again.", "warning");
+            return (window.location.href = "/login.html");
+          }
+
+          const idToken = await user.getIdToken(true);
+
+          const res = await fetch("https://api.usethemove.com/updateUser", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({ uid, phone, dorm, interests, dailyDigestOptIn }),
+          });
+
+          const data = await res.json();
+          if (data.success) showToast("✅ Profile updated!", "success");
+          else showToast(data.message || "⚠️ Error saving profile.", "warning");
+        } catch {
+          showToast("❌ Error updating profile.", "error");
+        }
+      }
+
+      window.onload = loadProfile;
+      window.saveProfile = saveProfile;
+    </script>
+  </body> 
+</html>
