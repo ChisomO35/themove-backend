@@ -11,7 +11,8 @@ const { Pinecone } = require("@pinecone-database/pinecone");
 
 console.log("🚀 OPENAI KEY?:", process.env.OPENAI_API_KEY ? "YES" : "NO");
 
-if (process.env.NODE_ENV !== "production") {
+const fs = require("fs");
+if (fs.existsSync(".env")) {
   require("dotenv").config();
 }
 
