@@ -23,7 +23,9 @@ app.use(express.urlencoded({ extended: false }));   // ⭐️ REQUIRED FOR TWILI
 
 const upload = multer({ dest: "uploads/" });
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function getOpenAI() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 
 // ⭐️ NEW — Twilio
 const twilio = require("twilio");
@@ -180,6 +182,7 @@ async function ensureUncEmail(req, res, next) {
 // -------------------------
 
 async function createEmbedding(text) {
+  const openai = getOpenAI();
   const embed = await openai.embeddings.create({
     model: "text-embedding-3-small",
     input: text,
@@ -524,7 +527,7 @@ Always include:
 Return only valid JSON.
 If a date is present, keep ISO format (YYYY-MM-DD).
     `.trim();
-
+    const openai = getOpenAI();
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       response_format: { type: "json_object" },
