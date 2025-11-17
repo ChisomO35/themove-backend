@@ -18,7 +18,9 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function getOpenAI() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 
 // --- Helper: get all posters (no time filter) ---
 async function getAllPosters() {
@@ -33,6 +35,7 @@ async function getAllPosters() {
 
 // --- Helper: create embedding ---
 async function createEmbedding(text) {
+  const openai = getOpenAI();
   const res = await openai.embeddings.create({
     model: "text-embedding-3-small",
     input: text,

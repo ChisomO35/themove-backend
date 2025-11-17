@@ -14,13 +14,16 @@ const ACTIVE_SCHOOLS = (process.env.ACTIVE_SCHOOLS || "UNC-Chapel Hill")
   .filter(Boolean);
 
 // --- Initialize clients ---
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function getOpenAI() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
 const index = pc.index(process.env.PINECONE_INDEX);
 const PINECONE_NAMESPACE = process.env.PINECONE_NAMESPACE || "campus";
 
 // --- Helpers ---
 async function createEmbedding(text) {
+  const openai = getOpenAI();
   const embed = await openai.embeddings.create({
     model: "text-embedding-3-small",
     input: text,
@@ -42,6 +45,7 @@ If the message implies an activity or interest, classify as "search".
 Respond ONLY with: search, info, signup, or random.
   `.trim();
 
+  const openai = getOpenAI();
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
@@ -108,6 +112,7 @@ Rules:
 Only output YYYY-MM-DD or "none".
   `.trim();
 
+  const openai = getOpenAI();
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     temperature: 0,
