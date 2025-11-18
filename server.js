@@ -612,7 +612,7 @@ If a date is present, keep ISO format (YYYY-MM-DD).
 
     // ✅ Save to Firestore
     const docRef = await db.collection("posters").add(data);
-    const posterUrl = `https://api.usethemove.com/${docRef.id}`;
+    const posterUrl = `${process.env.PUBLIC_APP_URL}/${docRef.id}`;
     await docRef.update({ poster_url: posterUrl });
     data.poster_url = posterUrl;
 
