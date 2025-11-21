@@ -5,7 +5,24 @@ const { OpenAI } = require("openai");
 
 dotenv.config();
 
-// --- Init clients (same as in search.js) ---
+// --- Helpers for correct local-timezone date handling ---
+function getLocalDate() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function addDays(date, n) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function getLocalDateFromISO(iso) {
+  const [yyyy, mm, dd] = iso.split("-");
+  return new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+}
+
+// --- Init clients ---
 function getOpenAI() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
@@ -13,9 +30,7 @@ const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
 const index = pc.index(process.env.PINECONE_INDEX);
 const PINECONE_NAMESPACE = process.env.PINECONE_NAMESPACE || "campus";
 
-// ---------- helpers copied in spirit from search.js ----------
-
-// Embeddings
+// ---------- embeddings ----------
 async function createEmbedding(text) {
   const openai = getOpenAI();
   const embed = await openai.embeddings.create({
@@ -25,18 +40,17 @@ async function createEmbedding(text) {
   return embed.data[0].embedding;
 }
 
-// Intent classifier – same categories as your CLI
+// ---------- intent classifier ----------
 async function detectIntent(message) {
   const systemPrompt = `
 You are an intent classifier for a college event discovery assistant called TheMove.
 Given a text message, categorize it into ONE of these categories only:
-- "search": The user expresses interest in doing something on campus or asks about events, clubs, or opportunities.
+- "search": The user is asking about events, what to do, or opportunities.
 - "info": Asking what TheMove is or how it works.
-- "signup": Asking how to sign up.
-- "random": Jokes, greetings, gibberish.
+- "signup": Asking about sign-up.
+- "random": Everything else.
 
-If the message implies an activity or interest, classify as "search".
-Respond ONLY with: search, info, signup, or random.
+Respond ONLY with: search, info, signup, random.
   `.trim();
 
   const openai = getOpenAI();
@@ -44,14 +58,14 @@ Respond ONLY with: search, info, signup, or random.
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: systemPrompt },
-      { role: "user", content: message },
-    ],
+      { role: "user", content: message }
+    ]
   });
 
   return res.choices[0].message.content.trim().toLowerCase();
 }
 
-// Time extractor – same idea as in search.js
+// ---------- TIME extraction ----------
 function extractExactTime(query) {
   const q = query.toLowerCase();
 
@@ -65,9 +79,7 @@ function extractExactTime(query) {
   if (suffix === "pm" && hour < 12) hour += 12;
   if (suffix === "am" && hour === 12) hour = 0;
 
-  const normalized = `${String(hour).padStart(2, "0")}:${String(
-    minute
-  ).padStart(2, "0")}`;
+  const normalized = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 
   if (q.includes("after")) return { operator: ">=", value: normalized };
   if (q.includes("before")) return { operator: "<=", value: normalized };
@@ -75,22 +87,50 @@ function extractExactTime(query) {
   return { operator: "=", value: normalized };
 }
 
-// Date extractor – same behavior pattern as your version
+// ==========================================================
+// 🚀 FULLY DETERMINISTIC DATE EXTRACTOR (NO LLM FOR WEEKDAYS)
+// ==========================================================
 async function extractExactDate(query) {
-  const today = new Date();
-  const localISO = new Date(today.getTime() - today.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 10);
+  const today = getLocalDate();
+  const lower = query.toLowerCase();
+  const localISO = today.toISOString().slice(0, 10);
 
+  // ---------------------------
+  // 1. Special keywords
+  // ---------------------------
+  if (lower.includes("tonight")) return today;
+  if (lower.includes("tomorrow")) return addDays(today, 1);
+
+  // in X days
+  const inDays = lower.match(/in\s+(\d+)\s+days?/);
+  if (inDays) return addDays(today, parseInt(inDays[1], 10));
+
+  // ---------------------------
+  // 2. Deterministic weekday logic
+  // ---------------------------
+  const weekdays = [
+    "sunday","monday","tuesday","wednesday","thursday","friday","saturday"
+  ];
+
+  const foundIdx = weekdays.findIndex((d) => lower.includes(d));
+
+  if (foundIdx !== -1) {
+    const dow = today.getDay();
+    let diff = (foundIdx - dow + 7) % 7;
+    if (diff === 0) diff = 7;        // always NEXT occurrence
+    return addDays(today, diff);
+  }
+
+  // ---------------------------
+  // 3. Full DATE provided → let LLM parse it ONLY for calendar dates
+  // ---------------------------
   const systemPrompt = `
-You return exactly one ISO date for a student's query.
-If no specific date is given, respond "none".
-Rules:
-- "Tonight" → today's date (${localISO})
-- "Tomorrow" → +1 day
-- Weekdays → next occurrence
-- Full dates → this year unless already passed.
-Only output YYYY-MM-DD or "none".
+Today is ${localISO}.
+If the user explicitly provides a calendar date like "Nov 22", "11/25", "November 30",
+convert it into an ISO date (YYYY-MM-DD).
+
+If NO calendar date is present, respond ONLY with "none".
+Never guess weekdays. Never infer context. Never interpret "Friday".
   `.trim();
 
   const openai = getOpenAI();
@@ -99,45 +139,32 @@ Only output YYYY-MM-DD or "none".
     temperature: 0,
     messages: [
       { role: "system", content: systemPrompt },
-      { role: "user", content: query },
-    ],
+      { role: "user", content: query }
+    ]
   });
 
-  const content = res.choices[0].message.content.trim();
+  const out = res.choices[0].message.content.trim();
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(content)) {
-    return new Date(content);
-  }
+  if (out === "none") return null;
 
-  const weekdays = [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-  ];
-  const lower = query.toLowerCase();
-  const found = weekdays.findIndex((d) => lower.includes(d));
-  if (found !== -1) {
-    const result = new Date(today);
-    const diff = (found + 7 - today.getDay()) % 7 || 7;
-    result.setDate(today.getDate() + diff);
-    return result;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(out)) {
+    return getLocalDateFromISO(out);
   }
 
   return null;
 }
 
-// Core search for SMS – mirrors your filters but RETURNS TEXT
+// ==========================================================
+// Core search for SMS
+// ==========================================================
 async function searchPostersForSMS(query, school) {
-  const today = new Date();
+  const today = getLocalDate();
+
   const currentDate = today.toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
-    day: "numeric",
+    day: "numeric"
   });
 
   const targetDate = await extractExactDate(query);
@@ -145,13 +172,10 @@ async function searchPostersForSMS(query, school) {
 
   let expandedQuery = `
     Today’s date is ${currentDate}.
-    A ${school} student is searching for a campus event or organization.
+    A ${school} student is looking for a campus event.
     Query: "${query}"
-    Match using: title, tags, description, date, time, location, org name, type.
-    If a date is mentioned, only match that date.
-  `
-    .replace(/\s+/g, " ")
-    .trim();
+    Match using title, tags, description, date, time, location.
+  `.replace(/\s+/g, " ").trim();
 
   if (targetDate) {
     expandedQuery += ` Only include events happening on ${targetDate.toDateString()}.`;
@@ -169,20 +193,18 @@ async function searchPostersForSMS(query, school) {
     (m) =>
       m.metadata.type === "poster" &&
       (!m.metadata.school ||
-        String(m.metadata.school).toLowerCase() === school.toLowerCase())
+       String(m.metadata.school).toLowerCase() === school.toLowerCase())
   );
 
+  // --- date filter ---
   if (targetDate) {
     filtered = filtered.filter((m) => {
-      const dateStr = m.metadata.date_normalized;
-      if (!dateStr) return false;
-      const d = new Date(dateStr);
-      return (
-        d.toISOString().slice(0, 10) === targetDate.toISOString().slice(0, 10)
-      );
+      const d = getLocalDateFromISO(m.metadata.date_normalized);
+      return d.toISOString().slice(0,10) === targetDate.toISOString().slice(0,10);
     });
   }
 
+  // --- time filter ---
   if (targetTime) {
     filtered = filtered.filter((m) => {
       const t = m.metadata.time_normalized_start;
@@ -191,14 +213,13 @@ async function searchPostersForSMS(query, school) {
       if (targetTime.operator === "=") return t === targetTime.value;
       if (targetTime.operator === ">=") return t >= targetTime.value;
       if (targetTime.operator === "<=") return t <= targetTime.value;
-
       return true;
     });
   }
 
-  // remove past events
+  // --- remove past events ---
   filtered = filtered.filter((m) => {
-    const d = new Date(m.metadata.date_normalized);
+    const d = getLocalDateFromISO(m.metadata.date_normalized);
     return d >= today;
   });
 
@@ -210,11 +231,8 @@ async function searchPostersForSMS(query, school) {
 
   let msg = `🎯 Top matches at ${school}:\n`;
   top3.forEach((match, i) => {
-    const date = match.metadata.date_normalized || "TBA";
-    msg += `\n${i + 1}. ${match.metadata.title} — ${date}`;
-    if (match.metadata.location) {
-      msg += ` @ ${match.metadata.location}`;
-    }
+    msg += `\n${i + 1}. ${match.metadata.title} — ${match.metadata.date_normalized}`;
+    if (match.metadata.location) msg += ` @ ${match.metadata.location}`;
     msg += `\nLink: https://localhost:3000/poster/${match.id}\n`;
   });
 
@@ -224,4 +242,6 @@ async function searchPostersForSMS(query, school) {
 module.exports = {
   detectIntent,
   searchPostersForSMS,
+  extractExactDate,
+  extractExactTime
 };
