@@ -1398,17 +1398,48 @@ app.post("/auth/send-verification-email", verifyFirebaseToken, async (req, res) 
   }
 });
 
+// Handle CORS preflight for verify-email
+app.options("/auth/verify-email", (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.status(200).end();
+});
+
 app.get("/auth/verify-email", async (req, res) => {
+  console.log(`📧 [Verify Email] Request received from origin: ${req.headers.origin}`);
+  console.log(`📧 [Verify Email] Token: ${req.query.token ? 'present' : 'missing'}`);
+  
+  // Set CORS headers immediately
+  const origin = req.headers.origin;
+  if (origin && (origin.includes('usethemove.com') || origin.includes('localhost'))) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  
   try {
     const { token } = req.query;
     if (!token) {
+      console.error("❌ [Verify Email] No token provided");
       return res.status(400).json({ success: false, message: "Token required" });
     }
 
+    console.log(`🔍 [Verify Email] Verifying token...`);
+    const startTime = Date.now();
     const result = await verifyEmailToken(token);
+    const duration = Date.now() - startTime;
+    console.log(`✅ [Verify Email] Verification completed in ${duration}ms, result:`, result);
+    
     res.json(result);
   } catch (err) {
-    console.error("❌ Error verifying email:", err);
+    console.error("❌ [Verify Email] Error:", err);
+    console.error("❌ [Verify Email] Error stack:", err.stack);
+    
     res.status(500).json({ success: false, message: "Failed to verify email" });
   }
 });

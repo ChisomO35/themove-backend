@@ -122,35 +122,57 @@ async function sendEmailVerification(uid, email) {
 
 // Verify email token
 async function verifyEmailToken(token) {
+  console.log(`🔍 [verifyEmailToken] Starting verification for token: ${token.substring(0, 10)}...`);
+  
   const stored = emailVerificationTokens.get(token);
 
   if (!stored) {
+    console.warn(`⚠️ [verifyEmailToken] Token not found in storage`);
     return { success: false, message: "Invalid or expired verification token" };
   }
 
   if (Date.now() > stored.expiresAt) {
+    console.warn(`⚠️ [verifyEmailToken] Token expired. Expires: ${new Date(stored.expiresAt).toISOString()}, Now: ${new Date().toISOString()}`);
     emailVerificationTokens.delete(token);
     return { success: false, message: "Verification token expired" };
   }
 
-  try {
-    // Mark email as verified in Firebase
-    await admin.auth().updateUser(stored.uid, {
-      emailVerified: true,
-    });
+  console.log(`✅ [verifyEmailToken] Token valid, verifying user: ${stored.uid}`);
 
-    // Update in Firestore
-    const db = admin.firestore();
-    await db.collection("users").doc(stored.uid).update({
+  try {
+    // Mark email as verified in Firebase with timeout
+    const firebasePromise = admin.auth().updateUser(stored.uid, {
       emailVerified: true,
     });
+    
+    const firebaseTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Firebase update timeout")), 10000)
+    );
+    
+    await Promise.race([firebasePromise, firebaseTimeout]);
+    console.log(`✅ [verifyEmailToken] Firebase auth updated`);
+
+    // Update in Firestore with timeout
+    const db = admin.firestore();
+    const firestorePromise = db.collection("users").doc(stored.uid).update({
+      emailVerified: true,
+    });
+    
+    const firestoreTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Firestore update timeout")), 10000)
+    );
+    
+    await Promise.race([firestorePromise, firestoreTimeout]);
+    console.log(`✅ [verifyEmailToken] Firestore updated`);
 
     // Remove token
     emailVerificationTokens.delete(token);
+    console.log(`✅ [verifyEmailToken] Token removed from storage`);
 
     return { success: true, message: "Email verified successfully" };
   } catch (error) {
-    console.error("❌ Error verifying email:", error);
+    console.error("❌ [verifyEmailToken] Error:", error);
+    console.error("❌ [verifyEmailToken] Error stack:", error.stack);
     return { success: false, message: "Failed to verify email" };
   }
 }
