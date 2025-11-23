@@ -806,10 +806,17 @@ app.get("/poster/:id", async (req, res) => {
       };
     </script>
     <style>
-      body {
+      * {
+        box-sizing: border-box;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
         background: #fafafa;
         font-family: "Poppins", sans-serif;
-        overflow: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
       }
       .banner {
         background: linear-gradient(90deg, #4f46e5, #6366f1, #4f46e5);
@@ -821,42 +828,48 @@ app.get("/poster/:id", async (req, res) => {
         50% { background-position: 100% 50%; }
         100% { background-position: 0% 50%; }
       }
+      @media (max-width: 640px) {
+        .poster-card {
+          max-height: calc(100vh - 140px);
+          overflow-y: auto;
+        }
+      }
     </style>
   </head>
 
   <body class="flex flex-col min-h-screen text-gray-800">
     <!-- ✅ Navbar -->
-    <header class="flex justify-between items-center px-6 py-4 bg-white shadow-md">
-      <a href="/" class="text-2xl font-bold text-primary tracking-tight hover:text-indigo-700 transition">
+    <header class="flex justify-between items-center px-4 sm:px-6 py-3 sm:py-4 bg-white shadow-md sticky top-0 z-40">
+      <a href="/" class="text-xl sm:text-2xl font-bold text-primary tracking-tight hover:text-indigo-700 transition">
         TheMove
       </a>
-      <nav class="flex items-center gap-4">
-        <a href="/login" class="text-gray-600 hover:text-primary font-medium">Login</a>
+      <nav class="flex items-center gap-2 sm:gap-4">
+        <a href="/login" class="text-sm sm:text-base text-gray-600 hover:text-primary font-medium">Login</a>
         <a
           href="/signup"
-          class="bg-primary text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition"
+          class="bg-primary text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl hover:bg-indigo-700 transition text-sm sm:text-base"
         >Join</a>
       </nav>
     </header>
 
     <!-- 💜 Promo Banner -->
-    <div class="banner w-full text-white text-center py-2 px-3 text-[0.9rem] font-medium shadow-md">
+    <div class="banner w-full text-white text-center py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium shadow-md">
       👋 Discover events like this anytime with <b>TheMove</b> —
       Text <span class="underline font-semibold">+1 (424) 447-8183</span> for AI-powered campus recommendations 🎓
     </div>
 
     <!-- ✅ Poster Card -->
-    <main class="flex-grow flex flex-col items-center justify-center px-6 py-4">
-      <div class="bg-white border border-gray-100 rounded-2xl shadow-md p-6 w-full max-w-md text-center">
-        <h1 class="text-lg font-semibold text-dark mb-4">${poster.poster_title || "Untitled Poster"}</h1>
+    <main class="flex-grow flex flex-col items-center justify-start sm:justify-center px-4 sm:px-6 py-4 sm:py-6">
+      <div class="poster-card bg-white border border-gray-100 rounded-2xl shadow-md p-4 sm:p-6 w-full max-w-md text-center">
+        <h1 class="text-base sm:text-lg font-semibold text-dark mb-3 sm:mb-4">${poster.poster_title || "Untitled Poster"}</h1>
 
         <img
           src="${poster.poster_image_url}"
           alt="Poster"
-          class="rounded-xl w-full object-contain max-h-[43vh] mb-5 shadow-sm"
+          class="rounded-xl w-full object-contain max-h-[50vh] sm:max-h-[60vh] mb-4 sm:mb-5 shadow-sm"
         />
 
-        <div class="text-left text-sm text-gray-700 leading-relaxed space-y-1.5">
+        <div class="text-left text-xs sm:text-sm text-gray-700 leading-relaxed space-y-1.5 mb-4">
           <p><b>Organization:</b> ${poster.organization_name || "N/A"}</p>
           ${
             isEvent
@@ -875,10 +888,10 @@ app.get("/poster/:id", async (req, res) => {
         </div>
 
         <!-- ✅ Share Button -->
-        <div class="mt-5 flex justify-center">
+        <div class="mt-4 sm:mt-5 flex justify-center">
           <button
             onclick="openShare()"
-            class="bg-primary text-white flex items-center gap-2 px-6 py-2 rounded-xl hover:bg-indigo-700 transition shadow-md"
+            class="bg-primary text-white flex items-center gap-2 px-5 sm:px-6 py-2 rounded-xl hover:bg-indigo-700 transition shadow-md text-sm sm:text-base"
           >
             <i class="fa-solid fa-share-nodes"></i> Share
           </button>
