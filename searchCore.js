@@ -33,12 +33,23 @@ const BASE_URL = process.env.PUBLIC_APP_URL || "https://api.usethemove.com";
 
 // ---------- embeddings ----------
 async function createEmbedding(text) {
-  const openai = getOpenAI();
-  const embed = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: text,
-  });
-  return embed.data[0].embedding;
+  try {
+    const openai = getOpenAI();
+    if (!openai) {
+      throw new Error("OpenAI client not initialized - check OPENAI_API_KEY");
+    }
+    const embed = await openai.embeddings.create({
+      model: "text-embedding-3-small",
+      input: text,
+    });
+    if (!embed || !embed.data || !embed.data[0] || !embed.data[0].embedding) {
+      throw new Error("Invalid embedding response from OpenAI");
+    }
+    return embed.data[0].embedding;
+  } catch (err) {
+    console.error("❌ createEmbedding error:", err);
+    throw err;
+  }
 }
 
 // ---------- intent classifier (full OpenAI-based) ----------
@@ -238,33 +249,56 @@ async function extractExactDate(query) {
   // ---------------------------
   // 4. LLM fallback ONLY for truly ambiguous/complex dates
   // ---------------------------
-  const systemPrompt = `
+  try {
+    const systemPrompt = `
 Today is ${localISO}.
 If the user explicitly provides a calendar date that you can parse, convert it into an ISO date (YYYY-MM-DD).
 
 If NO clear calendar date is present, respond ONLY with "none".
 Never guess weekdays. Never infer context. Only parse explicit calendar dates.
-  `.trim();
+    `.trim();
 
-  const openai = getOpenAI();
-  const res = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    temperature: 0,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: query }
-    ]
-  });
+    const openai = getOpenAI();
+    if (!openai) {
+      console.warn("⚠️ OpenAI client not available for date extraction");
+      return null;
+    }
 
-  const out = res.choices[0].message.content.trim();
+    // Add timeout for LLM call (5 seconds)
+    const llmPromise = openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: query }
+      ]
+    });
 
-  if (out === "none") return null;
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("LLM date extraction timeout")), 5000)
+    );
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(out)) {
-    return getLocalDateFromISO(out);
+    const res = await Promise.race([llmPromise, timeoutPromise]);
+
+    if (!res || !res.choices || !res.choices[0] || !res.choices[0].message) {
+      console.warn("⚠️ Invalid LLM response for date extraction");
+      return null;
+    }
+
+    const out = res.choices[0].message.content.trim();
+
+    if (out === "none") return null;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(out)) {
+      return getLocalDateFromISO(out);
+    }
+
+    return null;
+  } catch (err) {
+    console.error("❌ Error in LLM date extraction:", err.message);
+    // Return null on error - search will continue without date filter
+    return null;
   }
-
-  return null;
 }
 
 // ==========================================================
@@ -415,7 +449,9 @@ function extractTimeRange(query) {
 // Core search for SMS
 // ==========================================================
 async function searchPostersForSMS(query, school) {
-  const today = getLocalDate();
+  console.log(`🔍 [searchPostersForSMS] Starting search for: "${query}" in ${school}`);
+  try {
+    const today = getLocalDate();
 
   const currentDate = today.toLocaleDateString("en-US", {
     weekday: "long",
@@ -424,11 +460,33 @@ async function searchPostersForSMS(query, school) {
     day: "numeric"
   });
 
-  const targetDate = await extractExactDate(query);
-  const targetTime = extractExactTime(query);
-  const costIntent = extractCostIntent(query);
-  const timeRange = extractTimeRange(query);
-  const activityType = extractActivityType(query);
+    console.log(`🔍 [searchPostersForSMS] Extracting query parameters...`);
+    let targetDate, targetTime, costIntent, timeRange, activityType;
+    try {
+      // Add timeout for extractExactDate (it can call LLM)
+      const extractStartTime = Date.now();
+      targetDate = await Promise.race([
+        extractExactDate(query),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("extractExactDate timeout")), 8000)
+        )
+      ]);
+      console.log(`✅ [searchPostersForSMS] extractExactDate completed in ${Date.now() - extractStartTime}ms`);
+      
+      targetTime = extractExactTime(query);
+      costIntent = extractCostIntent(query);
+      timeRange = extractTimeRange(query);
+      activityType = extractActivityType(query);
+      console.log(`✅ [searchPostersForSMS] All parameters extracted`);
+    } catch (extractErr) {
+      console.error("❌ [searchPostersForSMS] Error extracting query parameters:", extractErr.message);
+      // Continue with null values - search will still work
+      targetDate = null;
+      targetTime = null;
+      costIntent = null;
+      timeRange = null;
+      activityType = null;
+    }
 
   // ✅ Hyper-accurate query expansion with synonyms and context
   // Build synonym-enhanced query
@@ -517,7 +575,10 @@ async function searchPostersForSMS(query, school) {
   // Add matching guidance
   expandedQuery += ` Match using title, tags, description, date, time, location, cost, and categories. Prioritize events that match the specific activities, interests, and requirements mentioned in the query.`;
 
+  console.log(`🔍 Starting search for: "${query}"`);
+
   const queryEmbedding = await createEmbedding(expandedQuery);
+  console.log(`✅ Embedding created, length: ${queryEmbedding.length}`);
 
   // ✅ Use Pinecone metadata filters for better performance
   const schoolNormalized = school.toLowerCase().replace(/[\s-]+/g, "");
@@ -528,23 +589,37 @@ async function searchPostersForSMS(query, school) {
     type: "poster",
     school_normalized: schoolNormalized,
   };
-  
+
   // Add date filter if we have a target date
   if (targetDate) {
     const targetISO = targetDate.toISOString().slice(0, 10);
     filter.date_normalized = targetISO;
+    console.log(`📅 Filtering by date: ${targetISO}`);
   } else {
     // Filter out past events at query time (but allow events without dates)
     // Note: Pinecone doesn't support OR filters easily, so we'll filter past events in JS
     // But we can still filter by type and school at query time
   }
 
-  const results = await index.namespace(PINECONE_NAMESPACE).query({
-    vector: queryEmbedding,
-    topK: 20,
-    includeMetadata: true,
-    filter: filter,
-  });
+  console.log(`🔎 Querying Pinecone with filter:`, filter);
+  let results;
+  try {
+    results = await index.namespace(PINECONE_NAMESPACE).query({
+      vector: queryEmbedding,
+      topK: 20,
+      includeMetadata: true,
+      filter: filter,
+    });
+    console.log(`📊 Pinecone returned ${results.matches?.length || 0} matches`);
+  } catch (pineconeErr) {
+    console.error("❌ Pinecone query error:", pineconeErr);
+    throw new Error(`Pinecone query failed: ${pineconeErr.message}`);
+  }
+  
+  if (!results || !results.matches) {
+    console.error("❌ Invalid Pinecone response:", results);
+    throw new Error("Invalid response from Pinecone");
+  }
 
   // ✅ Post-query filtering for complex logic (time, past events, edge cases)
   let filtered = results.matches.filter((m) => {
@@ -784,6 +859,7 @@ async function searchPostersForSMS(query, school) {
   }
   
   const topResults = finalResults;
+  console.log(`✅ Final results count: ${topResults.length}`);
 
   if (topResults.length === 0) {
     let suggestion = "Try asking in a different way or for another day!";
@@ -864,7 +940,19 @@ async function searchPostersForSMS(query, school) {
     }
   });
 
-  return msg.trim();
+    console.log(`✅ [searchPostersForSMS] Returning message, length: ${msg.trim().length}`);
+    return msg.trim();
+  } catch (err) {
+    console.error("❌ [searchPostersForSMS] Error:", err);
+    console.error("❌ [searchPostersForSMS] Error stack:", err.stack);
+    console.error("❌ [searchPostersForSMS] Query that failed:", query);
+    console.error("❌ [searchPostersForSMS] School:", school);
+    
+    // Always return a user-friendly error message
+    const errorMsg = "Sorry, I'm having trouble searching right now. Please try again in a moment!";
+    console.log(`✅ [searchPostersForSMS] Returning error message`);
+    return errorMsg;
+  }
 }
 
 module.exports = {

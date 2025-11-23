@@ -1145,18 +1145,43 @@ app.post("/sms", async (req, res) => {
         twiml.message("Try asking about campus events 🙂");
       } else {
         // ✅ Add timeout wrapper for search
-        let reply;
+        console.log(`🔍 [SMS Handler] Starting search for: "${incomingRaw}"`);
+        let reply = null;
+        const searchStartTime = Date.now();
+        
         try {
-          reply = await Promise.race([
-            searchPostersForSMS(incomingRaw, school),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error("Search timeout")), 20000)
-            )
-          ]);
+          const searchPromise = searchPostersForSMS(incomingRaw, school);
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => {
+              console.error(`⏱️ [SMS Handler] Search timeout after 20s for: "${incomingRaw}"`);
+              reject(new Error("Search timeout"));
+            }, 20000)
+          );
+          
+          reply = await Promise.race([searchPromise, timeoutPromise]);
+          
+          const searchDuration = Date.now() - searchStartTime;
+          console.log(`✅ [SMS Handler] Search completed in ${searchDuration}ms, reply length: ${reply?.length || 0}`);
+          
+          // Validate reply
+          if (!reply || typeof reply !== 'string') {
+            console.error("❌ [SMS Handler] Invalid reply from search:", reply);
+            reply = "Sorry, I couldn't find any events. Try asking in a different way!";
+          }
         } catch (searchErr) {
-          console.error("❌ Search error:", searchErr.message);
+          const searchDuration = Date.now() - searchStartTime;
+          console.error(`❌ [SMS Handler] Search error after ${searchDuration}ms:`, searchErr.message);
+          console.error("❌ [SMS Handler] Search error stack:", searchErr.stack);
           reply = "Sorry, I'm having trouble searching right now. Please try again in a moment!";
         }
+        
+        // Ensure we always have a reply
+        if (!reply || typeof reply !== 'string') {
+          console.error("❌ [SMS Handler] No reply set, using fallback");
+          reply = "Sorry, something went wrong. Please try again!";
+        }
+        
+        console.log(`📤 [SMS Handler] Sending reply (${reply.length} chars): "${reply.substring(0, 100)}..."`);
         twiml.message(reply);
       }
     }
