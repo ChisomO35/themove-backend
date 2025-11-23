@@ -780,7 +780,7 @@ app.get("/poster/:id", async (req, res) => {
     <!-- 💜 Promo Banner -->
     <div class="banner w-full text-white text-center py-2 px-3 text-[0.9rem] font-medium shadow-md">
       👋 Discover events like this anytime with <b>TheMove</b> —
-      Text <span class="underline font-semibold">+1 (555) 123-MOVE</span> for AI-powered campus recommendations 🎓
+      Text <span class="underline font-semibold">+1 (424) 447-8183</span> for AI-powered campus recommendations 🎓
     </div>
 
     <!-- ✅ Poster Card -->
