@@ -29,6 +29,7 @@ function getOpenAI() {
 const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
 const index = pc.index(process.env.PINECONE_INDEX);
 const PINECONE_NAMESPACE = process.env.PINECONE_NAMESPACE || "campus";
+const BASE_URL = process.env.PUBLIC_APP_URL || "https://api.usethemove.com";
 
 // ---------- embeddings ----------
 async function createEmbedding(text) {
@@ -233,7 +234,7 @@ async function searchPostersForSMS(query, school) {
   top3.forEach((match, i) => {
     msg += `\n${i + 1}. ${match.metadata.title} — ${match.metadata.date_normalized}`;
     if (match.metadata.location) msg += ` @ ${match.metadata.location}`;
-    msg += `\nLink: https://localhost:3000/poster/${match.id}\n`;
+    msg += `\nLink: ${BASE_URL}/poster/${match.id}\n`;
   });
 
   return msg.trim();
