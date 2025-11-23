@@ -24,7 +24,11 @@ const FROM_NAME = process.env.FROM_NAME || "TheMove";
 
 // Send email verification
 async function sendVerificationEmail(email, verificationUrl) {
-  const subject = "Verify your TheMove account";
+  const subject = "Verify Your Email";
+  
+  // Plain text version (better for spam filters)
+  const text = `Thanks for signing up for TheMove! Please verify your email address by clicking the link below:\n\n${verificationUrl}\n\nThis link will expire in 24 hours.\n\nIf you didn't create an account, you can safely ignore this email.\n\nTheMove - Find any event on campus in one text`;
+  
   const html = `
     <!DOCTYPE html>
     <html>
@@ -55,12 +59,17 @@ async function sendVerificationEmail(email, verificationUrl) {
   `;
 
   if (useResend) {
-    // Resend
+    // Resend - with better deliverability settings
     const { data, error } = await emailClient.emails.send({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: email,
+      reply_to: process.env.REPLY_TO_EMAIL || FROM_EMAIL, // Add reply-to
       subject,
       html,
+      text, // Plain text version
+      headers: {
+        'X-Entity-Ref-ID': `verify-${Date.now()}`, // Unique tracking
+      },
     });
 
     if (error) {
@@ -70,12 +79,19 @@ async function sendVerificationEmail(email, verificationUrl) {
 
     return { success: true, messageId: data?.id };
   } else {
-    // SendGrid
+    // SendGrid - with better deliverability settings
     const msg = {
       to: email,
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      replyTo: process.env.REPLY_TO_EMAIL || FROM_EMAIL,
       subject,
       html,
+      text, // Plain text version
+      mailSettings: {
+        sandboxMode: {
+          enable: false, // Make sure sandbox mode is off
+        },
+      },
     };
 
     await emailClient.send(msg);
