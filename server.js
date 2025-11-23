@@ -1134,7 +1134,7 @@ app.post("/sms", async (req, res) => {
 
       if (intent === "info") {
         twiml.message(
-          "I'm TheMove! Text me something like "poker tonight?" or "volunteer this weekend.""
+          "I'm TheMove! Text me something like \"poker tonight?\" or \"volunteer this weekend.\""
         );
       } else if (intent === "signup") {
         twiml.message("You can sign up at https://usethemove.com/signup 🚀");
