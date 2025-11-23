@@ -765,13 +765,13 @@ app.get("/poster/:id", async (req, res) => {
   <body class="flex flex-col min-h-screen text-gray-800">
     <!-- ✅ Navbar -->
     <header class="flex justify-between items-center px-6 py-4 bg-white shadow-md">
-      <a href="/index.html" class="text-2xl font-bold text-primary tracking-tight hover:text-indigo-700 transition">
+      <a href="/" class="text-2xl font-bold text-primary tracking-tight hover:text-indigo-700 transition">
         TheMove
       </a>
       <nav class="flex items-center gap-4">
-        <a href="/login.html" class="text-gray-600 hover:text-primary font-medium">Login</a>
+        <a href="/login" class="text-gray-600 hover:text-primary font-medium">Login</a>
         <a
-          href="/signup.html"
+          href="/signup"
           class="bg-primary text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition"
         >Join</a>
       </nav>
