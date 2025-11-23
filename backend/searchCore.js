@@ -41,66 +41,18 @@ async function createEmbedding(text) {
   return embed.data[0].embedding;
 }
 
-// ---------- quick intent detection (keyword-based) ----------
-function quickIntentDetect(message) {
-  const lower = message.toLowerCase().trim();
-  
-  // Signup intent - clear keywords
-  if (lower.includes("sign up") || lower.includes("signup") || 
-      lower.includes("register") || lower.includes("join") ||
-      lower.includes("create account") || lower.includes("sign up")) {
-    return "signup";
-  }
-  
-  // Info intent - asking about TheMove
-  if (lower.includes("what is") || lower.includes("what's") ||
-      lower.includes("how does") || lower.includes("how do") ||
-      lower.includes("what is themove") || lower.includes("what's themove") ||
-      lower.includes("who are you") || lower.includes("what are you") ||
-      lower === "info" || lower === "help" || lower === "?") {
-    return "info";
-  }
-  
-  // Default to search - most queries are searches
-  return "search";
-}
-
-// ---------- intent classifier (LLM fallback for ambiguous cases) ----------
+// ---------- intent classifier (full OpenAI-based) ----------
 async function detectIntent(message) {
-  // ✅ Try quick detection first
-  const quickResult = quickIntentDetect(message);
-  
-  // If quick detection is confident, return it
-  // Only use LLM for truly ambiguous cases
-  const lower = message.toLowerCase().trim();
-  const ambiguousPatterns = [
-    /^(hi|hello|hey|sup|what's up|wassup)/,  // Greetings
-    /^(thanks|thank you|thx)/,              // Gratitude
-    /^(yes|no|yep|nope|ok|okay|sure)/,      // Simple responses
-  ];
-  
-  const isAmbiguous = ambiguousPatterns.some(pattern => pattern.test(lower));
-  
-  // If quick detection says "search" and it's not ambiguous, trust it
-  if (quickResult === "search" && !isAmbiguous) {
-    return quickResult;
-  }
-  
-  // If quick detection found a specific intent, trust it
-  if (quickResult !== "search") {
-    return quickResult;
-  }
-  
-  // Only use LLM for ambiguous cases
   const systemPrompt = `
 You are an intent classifier for a college event discovery assistant called TheMove.
 Given a text message, categorize it into ONE of these categories only:
-- "search": The user is asking about events, what to do, or opportunities.
+- "search": The user expresses interest in doing something on campus or asks about events, clubs, or opportunities.
 - "info": Asking what TheMove is or how it works.
-- "signup": Asking about sign-up.
-- "random": Everything else (greetings, thanks, etc.).
+- "signup": Asking how to sign up.
+- "random": Jokes, greetings, gibberish, or anything that doesn't fit the above categories.
 
-Respond ONLY with: search, info, signup, random.
+If the message implies an activity or interest, classify as "search".
+Respond ONLY with: search, info, signup, or random.
   `.trim();
 
   const openai = getOpenAI();
@@ -109,10 +61,15 @@ Respond ONLY with: search, info, signup, random.
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: message }
-    ]
+    ],
+    temperature: 0.3, // Lower temperature for more consistent classification
   });
 
-  return res.choices[0].message.content.trim().toLowerCase();
+  const result = res.choices[0].message.content.trim().toLowerCase();
+  
+  // Validate result (fallback to search if invalid)
+  const validIntents = ["search", "info", "signup", "random"];
+  return validIntents.includes(result) ? result : "search";
 }
 
 // ---------- TIME extraction (enhanced with time of day ranges) ----------
@@ -501,7 +458,7 @@ async function searchPostersForSMS(query, school) {
       }
     }
   });
-  
+
   let expandedQuery = `
     Today's date is ${currentDate}.
     A ${school} student is searching for: "${query}".
@@ -842,69 +799,68 @@ async function searchPostersForSMS(query, school) {
     return `🙁 I couldn't find any upcoming events that match. ${suggestion}`;
   }
 
+  // ✅ Clean SMS formatting with emojis - optimized for mobile readability
   let msg = `🎯 Found ${topResults.length} ${topResults.length === 1 ? 'match' : 'matches'}:\n\n`;
   
   topResults.forEach((match, i) => {
-    // Title (bold with emoji for visual hierarchy)
+    // Number and title with emoji
     msg += `${i + 1}️⃣ ${match.metadata.title}\n`;
     
-    // Organization name (if available and different from title) - helps with recognition
+    // Organization name (if different from title)
     if (match.metadata.organization_name && 
         match.metadata.organization_name.toLowerCase() !== match.metadata.title.toLowerCase()) {
-      msg += `   by ${match.metadata.organization_name}\n`;
+      msg += `by ${match.metadata.organization_name}\n`;
     }
     
-    // Date and time (only for events, not organizations)
-    if (match.metadata.poster_type === "event" || match.metadata.date_normalized) {
-      const dateTimeParts = [];
-      if (match.metadata.date_normalized) {
-        const eventDate = getLocalDateFromISO(match.metadata.date_normalized);
-        if (eventDate) {
-          const dateStr = eventDate.toLocaleDateString("en-US", {
-            weekday: "short",
-            month: "short",
-            day: "numeric"
-          });
-          dateTimeParts.push(`📅 ${dateStr}`);
-        }
-      }
-      if (match.metadata.time) {
-        dateTimeParts.push(`🕐 ${match.metadata.time}`);
-      }
-      if (dateTimeParts.length > 0) {
-        msg += `   ${dateTimeParts.join(' • ')}\n`;
+    // Date and time (compact format with emojis)
+    const dateTimeParts = [];
+    if (match.metadata.date_normalized) {
+      const eventDate = getLocalDateFromISO(match.metadata.date_normalized);
+      if (eventDate) {
+        const dateStr = eventDate.toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric"
+        });
+        dateTimeParts.push(`📅 ${dateStr}`);
       }
     }
+    if (match.metadata.time) {
+      dateTimeParts.push(`🕐 ${match.metadata.time}`);
+    }
+    if (dateTimeParts.length > 0) {
+      msg += `${dateTimeParts.join(' • ')}\n`;
+    }
     
-    // Location (only if available)
+    // Location (if available)
     if (match.metadata.location) {
-      msg += `   📍 ${match.metadata.location}\n`;
+      msg += `📍 ${match.metadata.location}\n`;
     }
     
-    // Cost (only if available)
+    // Cost (if available)
     const cost = (match.metadata.cost || "").trim();
     if (cost) {
       const costLower = cost.toLowerCase();
       if (costLower.includes("free") || costLower.includes("no cost") || 
           costLower.includes("complimentary") || cost === "$0" || cost === "0") {
-        msg += `   💰 Free\n`;
+        msg += `💰 Free\n`;
       } else {
-        msg += `   💰 ${cost}\n`;
+        msg += `💰 ${cost}\n`;
       }
     }
     
-    // Tags/categories (brief, helps understand what it is) - only if available
-    const tags = match.metadata.tags ? match.metadata.tags.split(", ").filter(t => t.trim()).slice(0, 3) : [];
+    // Tags (brief, max 2) - only if available
+    const tags = match.metadata.tags ? match.metadata.tags.split(", ").filter(t => t.trim()).slice(0, 2) : [];
     if (tags.length > 0) {
-      msg += `   🏷️ ${tags.join(", ")}\n`;
+      msg += `🏷️ ${tags.join(", ")}\n`;
     }
     
-    // Link (clear call-to-action)
-    msg += `   🔗 ${BASE_URL}/poster/${match.id}\n`;
+    // Link with emoji
+    msg += `🔗 ${BASE_URL}/poster/${match.id}`;
     
-    // Spacing between results
+    // Spacing between results - double line break
     if (i < topResults.length - 1) {
-      msg += `\n`;
+      msg += `\n\n`;
     }
   });
 

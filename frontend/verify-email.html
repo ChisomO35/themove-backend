@@ -86,10 +86,25 @@
         return;
       }
 
-      // Verify email
+      // Verify email with timeout
       async function verifyEmail() {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
         try {
-          const res = await fetch(`https://themove-backend-production.up.railway.app/auth/verify-email?token=${token}`);
+          const res = await fetch(`https://themove-backend-production.up.railway.app/auth/verify-email?token=${token}`, {
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+          }
+
           const data = await res.json();
 
           document.getElementById("loading-state").classList.add("hidden");
@@ -101,10 +116,16 @@
             document.getElementById("error-message").textContent = data.message || "Verification failed.";
           }
         } catch (err) {
+          clearTimeout(timeoutId);
           console.error("❌ Verification error:", err);
           document.getElementById("loading-state").classList.add("hidden");
           document.getElementById("error-state").classList.remove("hidden");
-          document.getElementById("error-message").textContent = "An error occurred. Please try again.";
+          
+          if (err.name === 'AbortError') {
+            document.getElementById("error-message").textContent = "Request timed out. Please check your connection and try again.";
+          } else {
+            document.getElementById("error-message").textContent = "An error occurred. Please try again or contact support.";
+          }
         }
       }
 

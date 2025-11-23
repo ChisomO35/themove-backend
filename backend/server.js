@@ -16,7 +16,10 @@ if (fs.existsSync(".env")) {
 }
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "https://usethemove.com",
+  credentials: true
+}));
 app.use(express.static("."));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));   // ⭐️ REQUIRED FOR TWILIO
@@ -806,10 +809,17 @@ app.get("/poster/:id", async (req, res) => {
       };
     </script>
     <style>
-      body {
+      * {
+        box-sizing: border-box;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
         background: #fafafa;
         font-family: "Poppins", sans-serif;
-        overflow: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
       }
       .banner {
         background: linear-gradient(90deg, #4f46e5, #6366f1, #4f46e5);
@@ -821,42 +831,48 @@ app.get("/poster/:id", async (req, res) => {
         50% { background-position: 100% 50%; }
         100% { background-position: 0% 50%; }
       }
+      @media (max-width: 640px) {
+        .poster-card {
+          max-height: calc(100vh - 140px);
+          overflow-y: auto;
+        }
+      }
     </style>
   </head>
 
   <body class="flex flex-col min-h-screen text-gray-800">
     <!-- ✅ Navbar -->
-    <header class="flex justify-between items-center px-6 py-4 bg-white shadow-md">
-      <a href="/" class="text-2xl font-bold text-primary tracking-tight hover:text-indigo-700 transition">
+    <header class="flex justify-between items-center px-4 sm:px-6 py-3 sm:py-4 bg-white shadow-md sticky top-0 z-40">
+      <a href="/" class="text-xl sm:text-2xl font-bold text-primary tracking-tight hover:text-indigo-700 transition">
         TheMove
       </a>
-      <nav class="flex items-center gap-4">
-        <a href="/login" class="text-gray-600 hover:text-primary font-medium">Login</a>
+      <nav class="flex items-center gap-2 sm:gap-4">
+        <a href="/login" class="text-sm sm:text-base text-gray-600 hover:text-primary font-medium">Login</a>
         <a
           href="/signup"
-          class="bg-primary text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition"
+          class="bg-primary text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl hover:bg-indigo-700 transition text-sm sm:text-base"
         >Join</a>
       </nav>
     </header>
 
     <!-- 💜 Promo Banner -->
-    <div class="banner w-full text-white text-center py-2 px-3 text-[0.9rem] font-medium shadow-md">
+    <div class="banner w-full text-white text-center py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm font-medium shadow-md">
       👋 Discover events like this anytime with <b>TheMove</b> —
       Text <span class="underline font-semibold">+1 (424) 447-8183</span> for AI-powered campus recommendations 🎓
     </div>
 
     <!-- ✅ Poster Card -->
-    <main class="flex-grow flex flex-col items-center justify-center px-6 py-4">
-      <div class="bg-white border border-gray-100 rounded-2xl shadow-md p-6 w-full max-w-md text-center">
-        <h1 class="text-lg font-semibold text-dark mb-4">${poster.poster_title || "Untitled Poster"}</h1>
+    <main class="flex-grow flex flex-col items-center justify-start sm:justify-center px-4 sm:px-6 py-4 sm:py-6">
+      <div class="poster-card bg-white border border-gray-100 rounded-2xl shadow-md p-4 sm:p-6 w-full max-w-md text-center">
+        <h1 class="text-base sm:text-lg font-semibold text-dark mb-3 sm:mb-4">${poster.poster_title || "Untitled Poster"}</h1>
 
         <img
           src="${poster.poster_image_url}"
           alt="Poster"
-          class="rounded-xl w-full object-contain max-h-[43vh] mb-5 shadow-sm"
+          class="rounded-xl w-full object-contain max-h-[50vh] sm:max-h-[60vh] mb-4 sm:mb-5 shadow-sm"
         />
 
-        <div class="text-left text-sm text-gray-700 leading-relaxed space-y-1.5">
+        <div class="text-left text-xs sm:text-sm text-gray-700 leading-relaxed space-y-1.5 mb-4">
           <p><b>Organization:</b> ${poster.organization_name || "N/A"}</p>
           ${
             isEvent
@@ -875,10 +891,10 @@ app.get("/poster/:id", async (req, res) => {
         </div>
 
         <!-- ✅ Share Button -->
-        <div class="mt-5 flex justify-center">
+        <div class="mt-4 sm:mt-5 flex justify-center">
           <button
             onclick="openShare()"
-            class="bg-primary text-white flex items-center gap-2 px-6 py-2 rounded-xl hover:bg-indigo-700 transition shadow-md"
+            class="bg-primary text-white flex items-center gap-2 px-5 sm:px-6 py-2 rounded-xl hover:bg-indigo-700 transition shadow-md text-sm sm:text-base"
           >
             <i class="fa-solid fa-share-nodes"></i> Share
           </button>
@@ -1032,37 +1048,44 @@ app.post("/deleteAccount", verifyFirebaseToken, async (req, res) => {
 
 // ⭐️ DAILY DIGEST STOP + HELP HANDLER
 app.post("/sms/inbound", async (req, res) => {
-  const body = (req.body.Body || "").trim().toLowerCase();
-  const from = req.body.From;
+  try {
+    const body = (req.body.Body || "").trim().toLowerCase();
+    const from = req.body.From;
 
-  // Look up user by phone #
-  const snapshot = await db.collection("users").where("phone", "==", from).get();
-  const userDoc = snapshot.empty ? null : snapshot.docs[0];
+    // Look up user by phone #
+    const snapshot = await db.collection("users").where("phone", "==", from).get();
+    const userDoc = snapshot.empty ? null : snapshot.docs[0];
 
-  const twiml = new MessagingResponse();
+    const twiml = new MessagingResponse();
 
-  if (!userDoc) {
-    twiml.message("You're not registered with TheMove.");
-    return res.type("text/xml").send(twiml.toString());
+    if (!userDoc) {
+      twiml.message("You're not registered with TheMove.");
+      return res.type("text/xml").send(twiml.toString());
+    }
+
+    const ref = userDoc.ref;
+
+    if (body === "stop") {
+      await ref.update({ dailyDigestOptIn: false });
+      twiml.message("You've been unsubscribed from TheMove Daily Digest. Reply START to rejoin.");
+      return res.type("text/xml").send(twiml.toString());
+    }
+
+    if (body === "help") {
+      twiml.message(
+        "You're chatting with TheMove! Daily Digest 1 msg/day. Reply STOP to unsubscribe. Msg&data rates may apply."
+      );
+      return res.type("text/xml").send(twiml.toString());
+    }
+
+    // Not STOP or HELP → pass through to normal /sms handling
+    // Send empty response so Twilio knows we processed it, but let /sms handle the actual response
+    return res.type("text/xml").send("");
+  } catch (err) {
+    console.error("❌ /sms/inbound error:", err);
+    // Still send empty response to avoid Twilio retries
+    return res.type("text/xml").send("");
   }
-
-  const ref = userDoc.ref;
-
-  if (body === "stop") {
-    await ref.update({ dailyDigestOptIn: false });
-    twiml.message("You've been unsubscribed from TheMove Daily Digest. Reply START to rejoin.");
-    return res.type("text/xml").send(twiml.toString());
-  }
-
-  if (body === "help") {
-    twiml.message(
-      "You’re chatting with TheMove! Daily Digest 1 msg/day. Reply STOP to unsubscribe. Msg&data rates may apply."
-    );
-    return res.type("text/xml").send(twiml.toString());
-  }
-
-  // Not STOP or HELP → pass through to normal /sms handling
-  return res.send("");
 });
 
 app.post("/sms", async (req, res) => {
@@ -1074,6 +1097,18 @@ app.post("/sms", async (req, res) => {
     return res.type("text/xml").send("");
   }
 
+  // ✅ Set timeout to ensure response is always sent
+  let responseSent = false;
+  const timeout = setTimeout(() => {
+    if (!responseSent && !res.headersSent) {
+      responseSent = true;
+      console.error(`⏱️ SMS timeout for "${incoming}" from ${req.body.From || "unknown"}`);
+      const timeoutTwiml = new MessagingResponse();
+      timeoutTwiml.message("Sorry, that took too long. Please try again!");
+      res.type("text/xml").send(timeoutTwiml.toString());
+    }
+  }, 25000); // 25 second timeout (Twilio has 30s limit)
+
   try {
     const school = "UNC-Chapel Hill"; // hardcoded for now
     const incomingRaw = (req.body.Body || "").trim(); // preserve original capitalization
@@ -1081,28 +1116,64 @@ app.post("/sms", async (req, res) => {
     if (!incomingRaw) {
       twiml.message("Tell me what you're looking for on campus 🙂");
     } else {
-      const intent = await detectIntent(incomingRaw);
+      const from = req.body.From || "unknown";
+      console.log(`📱 SMS received: "${incomingRaw}" from ${from}`);
+      
+      // ✅ Add timeout wrapper for intent detection (10s max)
+      let intent;
+      try {
+        intent = await Promise.race([
+          detectIntent(incomingRaw),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Intent detection timeout")), 10000)
+          )
+        ]);
+        console.log(`🎯 Intent detected: ${intent}`);
+      } catch (intentErr) {
+        console.error("❌ Intent detection error:", intentErr.message);
+        // Default to search if intent detection fails
+        intent = "search";
+      }
 
       if (intent === "info") {
         twiml.message(
-          "I'm TheMove! Text me something like “poker tonight?” or “volunteer this weekend.”"
+          "I'm TheMove! Text me something like \"poker tonight?\" or \"volunteer this weekend.\""
         );
       } else if (intent === "signup") {
         twiml.message("You can sign up at https://usethemove.com/signup 🚀");
       } else if (intent === "random") {
         twiml.message("Try asking about campus events 🙂");
       } else {
-        const reply = await searchPostersForSMS(incomingRaw, school);
+        // ✅ Add timeout wrapper for search
+        let reply;
+        try {
+          reply = await Promise.race([
+            searchPostersForSMS(incomingRaw, school),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error("Search timeout")), 20000)
+            )
+          ]);
+        } catch (searchErr) {
+          console.error("❌ Search error:", searchErr.message);
+          reply = "Sorry, I'm having trouble searching right now. Please try again in a moment!";
+        }
         twiml.message(reply);
       }
     }
   } catch (err) {
     console.error("❌ Twilio /sms error:", err);
+    console.error("Error stack:", err.stack);
     twiml.message("Something went wrong — try again soon.");
+  } finally {
+    clearTimeout(timeout);
+    // ✅ Always send a response, even if there was an error
+    if (!responseSent && !res.headersSent) {
+      responseSent = true;
+      res.type("text/xml");
+      res.send(twiml.toString());
+      console.log(`✅ SMS response sent to ${req.body.From || "unknown"}`);
+    }
   }
-
-  res.type("text/xml");
-  res.send(twiml.toString());
 });
 
 
