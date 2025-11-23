@@ -1,4 +1,3 @@
-const fs = require("fs");
 const express = require("express");
 const multer = require("multer");
 const cors = require("cors");
@@ -9,7 +8,12 @@ const cloudinary = require("cloudinary").v2;
 const admin = require("firebase-admin");
 const { Pinecone } = require("@pinecone-database/pinecone");
 
-dotenv.config();
+console.log("🚀 OPENAI KEY?:", process.env.OPENAI_API_KEY ? "YES" : "NO");
+
+const fs = require("fs");
+if (fs.existsSync(".env")) {
+  require("dotenv").config();
+}
 
 const app = express();
 app.use(cors());
@@ -19,7 +23,9 @@ app.use(express.urlencoded({ extended: false }));   // ⭐️ REQUIRED FOR TWILI
 
 const upload = multer({ dest: "uploads/" });
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function getOpenAI() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 
 // ⭐️ NEW — Twilio
 const twilio = require("twilio");
@@ -43,7 +49,7 @@ cloudinary.config({
 // -------------------------
 
 if (!admin.apps.length) {
-  const serviceAccount = require("./firebase-service-account.json");
+  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -176,6 +182,7 @@ async function ensureUncEmail(req, res, next) {
 // -------------------------
 
 async function createEmbedding(text) {
+  const openai = getOpenAI();
   const embed = await openai.embeddings.create({
     model: "text-embedding-3-small",
     input: text,
@@ -520,7 +527,7 @@ Always include:
 Return only valid JSON.
 If a date is present, keep ISO format (YYYY-MM-DD).
     `.trim();
-
+    const openai = getOpenAI();
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       response_format: { type: "json_object" },
