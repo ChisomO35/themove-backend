@@ -1045,37 +1045,44 @@ app.post("/deleteAccount", verifyFirebaseToken, async (req, res) => {
 
 // ⭐️ DAILY DIGEST STOP + HELP HANDLER
 app.post("/sms/inbound", async (req, res) => {
-  const body = (req.body.Body || "").trim().toLowerCase();
-  const from = req.body.From;
+  try {
+    const body = (req.body.Body || "").trim().toLowerCase();
+    const from = req.body.From;
 
-  // Look up user by phone #
-  const snapshot = await db.collection("users").where("phone", "==", from).get();
-  const userDoc = snapshot.empty ? null : snapshot.docs[0];
+    // Look up user by phone #
+    const snapshot = await db.collection("users").where("phone", "==", from).get();
+    const userDoc = snapshot.empty ? null : snapshot.docs[0];
 
-  const twiml = new MessagingResponse();
+    const twiml = new MessagingResponse();
 
-  if (!userDoc) {
-    twiml.message("You're not registered with TheMove.");
-    return res.type("text/xml").send(twiml.toString());
+    if (!userDoc) {
+      twiml.message("You're not registered with TheMove.");
+      return res.type("text/xml").send(twiml.toString());
+    }
+
+    const ref = userDoc.ref;
+
+    if (body === "stop") {
+      await ref.update({ dailyDigestOptIn: false });
+      twiml.message("You've been unsubscribed from TheMove Daily Digest. Reply START to rejoin.");
+      return res.type("text/xml").send(twiml.toString());
+    }
+
+    if (body === "help") {
+      twiml.message(
+        "You're chatting with TheMove! Daily Digest 1 msg/day. Reply STOP to unsubscribe. Msg&data rates may apply."
+      );
+      return res.type("text/xml").send(twiml.toString());
+    }
+
+    // Not STOP or HELP → pass through to normal /sms handling
+    // Send empty response so Twilio knows we processed it, but let /sms handle the actual response
+    return res.type("text/xml").send("");
+  } catch (err) {
+    console.error("❌ /sms/inbound error:", err);
+    // Still send empty response to avoid Twilio retries
+    return res.type("text/xml").send("");
   }
-
-  const ref = userDoc.ref;
-
-  if (body === "stop") {
-    await ref.update({ dailyDigestOptIn: false });
-    twiml.message("You've been unsubscribed from TheMove Daily Digest. Reply START to rejoin.");
-    return res.type("text/xml").send(twiml.toString());
-  }
-
-  if (body === "help") {
-    twiml.message(
-      "You’re chatting with TheMove! Daily Digest 1 msg/day. Reply STOP to unsubscribe. Msg&data rates may apply."
-    );
-    return res.type("text/xml").send(twiml.toString());
-  }
-
-  // Not STOP or HELP → pass through to normal /sms handling
-  return res.send("");
 });
 
 app.post("/sms", async (req, res) => {
@@ -1087,6 +1094,18 @@ app.post("/sms", async (req, res) => {
     return res.type("text/xml").send("");
   }
 
+  // ✅ Set timeout to ensure response is always sent
+  let responseSent = false;
+  const timeout = setTimeout(() => {
+    if (!responseSent && !res.headersSent) {
+      responseSent = true;
+      console.error(`⏱️ SMS timeout for "${incoming}" from ${req.body.From || "unknown"}`);
+      const timeoutTwiml = new MessagingResponse();
+      timeoutTwiml.message("Sorry, that took too long. Please try again!");
+      res.type("text/xml").send(timeoutTwiml.toString());
+    }
+  }, 25000); // 25 second timeout (Twilio has 30s limit)
+
   try {
     const school = "UNC-Chapel Hill"; // hardcoded for now
     const incomingRaw = (req.body.Body || "").trim(); // preserve original capitalization
@@ -1094,28 +1113,64 @@ app.post("/sms", async (req, res) => {
     if (!incomingRaw) {
       twiml.message("Tell me what you're looking for on campus 🙂");
     } else {
-      const intent = await detectIntent(incomingRaw);
+      const from = req.body.From || "unknown";
+      console.log(`📱 SMS received: "${incomingRaw}" from ${from}`);
+      
+      // ✅ Add timeout wrapper for intent detection (10s max)
+      let intent;
+      try {
+        intent = await Promise.race([
+          detectIntent(incomingRaw),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Intent detection timeout")), 10000)
+          )
+        ]);
+        console.log(`🎯 Intent detected: ${intent}`);
+      } catch (intentErr) {
+        console.error("❌ Intent detection error:", intentErr.message);
+        // Default to search if intent detection fails
+        intent = "search";
+      }
 
       if (intent === "info") {
         twiml.message(
-          "I'm TheMove! Text me something like “poker tonight?” or “volunteer this weekend.”"
+          "I'm TheMove! Text me something like "poker tonight?" or "volunteer this weekend.""
         );
       } else if (intent === "signup") {
         twiml.message("You can sign up at https://usethemove.com/signup 🚀");
       } else if (intent === "random") {
         twiml.message("Try asking about campus events 🙂");
       } else {
-        const reply = await searchPostersForSMS(incomingRaw, school);
+        // ✅ Add timeout wrapper for search
+        let reply;
+        try {
+          reply = await Promise.race([
+            searchPostersForSMS(incomingRaw, school),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error("Search timeout")), 20000)
+            )
+          ]);
+        } catch (searchErr) {
+          console.error("❌ Search error:", searchErr.message);
+          reply = "Sorry, I'm having trouble searching right now. Please try again in a moment!";
+        }
         twiml.message(reply);
       }
     }
   } catch (err) {
     console.error("❌ Twilio /sms error:", err);
+    console.error("Error stack:", err.stack);
     twiml.message("Something went wrong — try again soon.");
+  } finally {
+    clearTimeout(timeout);
+    // ✅ Always send a response, even if there was an error
+    if (!responseSent && !res.headersSent) {
+      responseSent = true;
+      res.type("text/xml");
+      res.send(twiml.toString());
+      console.log(`✅ SMS response sent to ${req.body.From || "unknown"}`);
+    }
   }
-
-  res.type("text/xml");
-  res.send(twiml.toString());
 });
 
 

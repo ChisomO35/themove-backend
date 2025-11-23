@@ -809,7 +809,7 @@ async function searchPostersForSMS(query, school) {
     // Organization name (if different from title)
     if (match.metadata.organization_name && 
         match.metadata.organization_name.toLowerCase() !== match.metadata.title.toLowerCase()) {
-      msg += `   by ${match.metadata.organization_name}\n`;
+      msg += `by ${match.metadata.organization_name}\n`;
     }
     
     // Date and time (compact format with emojis)
@@ -829,12 +829,12 @@ async function searchPostersForSMS(query, school) {
       dateTimeParts.push(`🕐 ${match.metadata.time}`);
     }
     if (dateTimeParts.length > 0) {
-      msg += `   ${dateTimeParts.join(' • ')}\n`;
+      msg += `${dateTimeParts.join(' • ')}\n`;
     }
     
     // Location (if available)
     if (match.metadata.location) {
-      msg += `   📍 ${match.metadata.location}\n`;
+      msg += `📍 ${match.metadata.location}\n`;
     }
     
     // Cost (if available)
@@ -843,20 +843,20 @@ async function searchPostersForSMS(query, school) {
       const costLower = cost.toLowerCase();
       if (costLower.includes("free") || costLower.includes("no cost") || 
           costLower.includes("complimentary") || cost === "$0" || cost === "0") {
-        msg += `   💰 Free\n`;
+        msg += `💰 Free\n`;
       } else {
-        msg += `   💰 ${cost}\n`;
+        msg += `💰 ${cost}\n`;
       }
     }
     
     // Tags (brief, max 2) - only if available
     const tags = match.metadata.tags ? match.metadata.tags.split(", ").filter(t => t.trim()).slice(0, 2) : [];
     if (tags.length > 0) {
-      msg += `   🏷️ ${tags.join(", ")}\n`;
+      msg += `🏷️ ${tags.join(", ")}\n`;
     }
     
     // Link with emoji
-    msg += `   🔗 ${BASE_URL}/poster/${match.id}`;
+    msg += `🔗 ${BASE_URL}/poster/${match.id}`;
     
     // Spacing between results - double line break
     if (i < topResults.length - 1) {
