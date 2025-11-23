@@ -34,6 +34,17 @@ const MessagingResponse = twilio.twiml.MessagingResponse;
 // ⭐️ NEW — import your SMS-specific search logic
 const { detectIntent, searchPostersForSMS } = require("./searchCore");
 
+// ⭐️ NEW — import auth helpers
+const {
+  sendPhoneVerificationCode,
+  verifyPhoneCode,
+  sendEmailVerification,
+  verifyEmailToken,
+  sendPasswordResetEmail,
+  verifyPasswordResetToken,
+  resetPassword,
+} = require("./authHelpers");
+
 // -------------------------
 // Cloudinary
 // -------------------------
@@ -269,10 +280,15 @@ app.post("/createUser", verifyFirebaseToken, async (req, res) => {
     const email = req.user.email || "";
     const verifiedStatus = req.user.email_verified || false;
 
+    // ✅ Enhanced user embedding - more descriptive and searchable
+    const interestsList = (interests || []).join(", ");
     const userText = `
-      My name is ${name || "a UNC student"}.
-      I live in ${dorm || "a dorm"}.
-      My interests include ${(interests || []).join(", ")}.
+      I'm a ${school || "UNC"} student. My interests: ${interestsList}.
+      I want to find campus events about: ${interestsList}.
+      I'm interested in activities related to: ${interestsList}.
+      Looking for opportunities in: ${interestsList}.
+      ${dorm ? `I live in ${dorm} dormitory.` : ""}
+      I search for events matching these topics: ${interestsList}.
     `.replace(/\s+/g, " ").trim();
 
     const embedding = await createEmbedding(userText);
@@ -306,6 +322,7 @@ app.post("/createUser", verifyFirebaseToken, async (req, res) => {
       email,
       dorm,
       interests,
+      embedding: embedding, // ✅ Store embedding in Firestore
       embedding_model: "text-embedding-3-small",
       embedding_version: "v1",
       created_at: new Date().toISOString(),
@@ -339,8 +356,21 @@ app.post("/updateUser", verifyFirebaseToken, ensureUncEmail, async (req, res) =>
     const email = req.user.email || "";
     const verifiedStatus = req.user.email_verified || false;
 
-    // Optional: skip creating embeddings every save if unnecessary
-    const userText = `I'm a UNC student living in ${dorm || "a dorm"} who enjoys ${(interests || []).join(", ")}.`;
+    // ✅ Get existing user data to preserve school
+    const existingUser = await db.collection("users").doc(finalUid).get();
+    const existingData = existingUser.exists ? existingUser.data() : {};
+    const userSchool = existingData.school || "UNC-Chapel Hill";
+
+    // ✅ Enhanced user embedding - more descriptive and searchable
+    const interestsList = (interests || []).join(", ");
+    const userText = `
+      I'm a ${userSchool} student. My interests: ${interestsList}.
+      I want to find campus events about: ${interestsList}.
+      I'm interested in activities related to: ${interestsList}.
+      Looking for opportunities in: ${interestsList}.
+      ${dorm ? `I live in ${dorm} dormitory.` : ""}
+      I search for events matching these topics: ${interestsList}.
+    `.replace(/\s+/g, " ").trim();
     const embedding = await createEmbedding(userText);
 
     const userData = {
@@ -349,6 +379,7 @@ app.post("/updateUser", verifyFirebaseToken, ensureUncEmail, async (req, res) =>
       phone,
       dorm,
       interests,
+      embedding: embedding, // ✅ Store embedding in Firestore
       embedding_model: "text-embedding-3-small",
       embedding_version: "v1",
       emailVerified: verifiedStatus,
@@ -502,8 +533,9 @@ app.post("/extract", upload.single("poster"), async (req, res) => {
     };
 
     // ✅ Use AI for full structured extraction — event/org + tags + categories
+    // Tags should match user interest categories for better matching
     const prompt = `
-Today’s date is ${currentDate}.
+Today's date is ${currentDate}.
 This poster was likely created for events happening around the current semester or year.
 
 Analyze this college poster and return structured JSON only — no explanations.
@@ -519,8 +551,15 @@ Always include:
 - "description" or "summary_text"
 - "date", "time", "location" (for events)
 - "how_to_join", "meeting_times", "contact_info" (for organizations)
-- "tags": 3–7 short keywords summarizing the main ideas, themes, or vibes
-- "categories": 1–3 from defined list
+- "tags": 3–7 specific keywords that match student interests. Use specific terms like:
+  * Music genres: "Hip Hop / Rap", "Pop", "Jazz", "Rock", "EDM / Electronic", "Indie", "R&B", "Country", "Latin", "Folk", "Classical", "Alternative"
+  * Sports: "Basketball", "Soccer", "Volleyball", "Tennis", "Running", "Yoga", "Weightlifting", "Swimming", "Rugby", "Intramurals"
+  * Arts: "Theatre", "Dance", "Visual Arts", "Photography", "Film", "Comedy", "Music Performance", "Fashion", "Creative Writing"
+  * Business: "Startups & Entrepreneurship", "Finance & Investment", "Marketing & Branding", "Career Development"
+  * Wellness: "Mental Health", "Fitness & Nutrition", "Self-Care & Mindfulness"
+  * Causes: "Volunteer", "Community Service", "Animal Welfare", "Environment", "Education"
+  Use the most specific matching terms from the list above. If none match exactly, use the closest related term.
+- "categories": 1–3 from: Music, Sports & Fitness, Arts & Culture, Business & Innovation, Wellness & Health, Charity & Causes, Community, Government, Spirituality, Hobbies, General
 - "audience"
 - "cost"
 - "frequency"
@@ -616,29 +655,52 @@ If a date is present, keep ISO format (YYYY-MM-DD).
     await docRef.update({ poster_url: posterUrl });
     data.poster_url = posterUrl;
 
-    // ✅ Create embedding text
-    const textToEmbed = `
-      ${data.poster_title ?? ""} 
-      ${data.organization_name ?? ""} 
-      ${data.description ?? data.summary_text ?? ""} 
-      Event Date: ${
-        data.date_normalized
-          ? new Date(data.date_normalized + "T00:00:00").toLocaleDateString("en-US", {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })
-          : ""
+    // ✅ Enhanced embedding text - optimized for hyper-accurate matching
+    // Structure: Keywords (repeated) → Title → Description → Details
+    const tags = (data.tags ?? []) || [];
+    const categories = (data.categories ?? []) || [];
+    const title = data.poster_title ?? "";
+    const orgName = data.organization_name ?? "";
+    const description = data.description ?? data.summary_text ?? "";
+    
+    // Build keyword-rich text with repetition for emphasis
+    const keywordPhrases = [];
+    tags.forEach(tag => keywordPhrases.push(tag));
+    categories.forEach(cat => keywordPhrases.push(cat));
+    
+    // Extract key terms from title for additional keywords
+    const titleWords = title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    titleWords.forEach(word => {
+      if (!keywordPhrases.some(kp => kp.toLowerCase().includes(word))) {
+        keywordPhrases.push(word);
       }
-      Event Time: ${data.time || ""}
-      Location: ${data.location || ""}
-      Audience: ${data.audience || ""}
-      Cost: ${data.cost || ""}
-      Frequency: ${data.frequency || ""}
-      Keywords: ${(data.tags ?? []).join(", ")}.
-      Categories: ${(data.categories ?? []).join(", ")}.
-      Type: ${data.poster_type ?? "general"}.
+    });
+    
+    const keywordsText = keywordPhrases.length > 0 
+      ? `Keywords: ${keywordPhrases.join(", ")}. Tags: ${tags.join(", ")}. Categories: ${categories.join(", ")}.` 
+      : "";
+    
+    // Enhanced structured text
+    const textToEmbed = `
+      ${keywordsText}
+      Event Title: ${title}. 
+      ${orgName ? `Organization: ${orgName}.` : ""}
+      ${description ? `Description: ${description}` : ""}
+      ${data.poster_type === "event" ? "Type: Campus event." : "Type: Student organization."}
+      ${data.date_normalized
+        ? `Date: ${new Date(data.date_normalized + "T00:00:00").toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })}`
+        : ""}
+      ${data.time ? `Time: ${data.time}` : ""}
+      ${data.location ? `Location: ${data.location}` : ""}
+      ${data.audience ? `For: ${data.audience}` : ""}
+      ${data.cost ? `Cost: ${data.cost}` : ""}
+      ${data.frequency ? `Frequency: ${data.frequency}` : ""}
+      ${tags.length > 0 ? `Searchable terms: ${tags.join(", ")}` : ""}
     `
       .replace(/\s+/g, " ")
       .trim();
@@ -1075,6 +1137,114 @@ app.post("/cleanupExpiredPosters", async (req, res) => {
   } catch (err) {
     console.error("❌ Cleanup error:", err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ⭐️ NEW AUTH ROUTES - Phone Verification
+app.post("/auth/send-phone-code", verifyFirebaseToken, async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ success: false, message: "Phone number required" });
+    }
+
+    const result = await sendPhoneVerificationCode(phone);
+    res.json(result);
+  } catch (err) {
+    console.error("❌ Error sending phone code:", err);
+    res.status(500).json({ success: false, message: "Failed to send verification code" });
+  }
+});
+
+app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
+  try {
+    const { phone, code } = req.body;
+    if (!phone || !code) {
+      return res.status(400).json({ success: false, message: "Phone and code required" });
+    }
+
+    const result = verifyPhoneCode(phone, code);
+    if (result.success) {
+      // Link phone to user in Firebase
+      const uid = req.user.uid;
+      await admin.auth().updateUser(uid, { phoneNumber: phone });
+      
+      // Update in Firestore
+      await db.collection("users").doc(uid).update({ phone });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error("❌ Error verifying phone code:", err);
+    res.status(500).json({ success: false, message: "Failed to verify code" });
+  }
+});
+
+// ⭐️ NEW AUTH ROUTES - Email Verification
+app.post("/auth/send-verification-email", verifyFirebaseToken, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const email = req.user.email;
+    
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email not found" });
+    }
+
+    const result = await sendEmailVerification(uid, email);
+    res.json(result);
+  } catch (err) {
+    console.error("❌ Error sending verification email:", err);
+    res.status(500).json({ success: false, message: "Failed to send verification email" });
+  }
+});
+
+app.get("/auth/verify-email", async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) {
+      return res.status(400).json({ success: false, message: "Token required" });
+    }
+
+    const result = await verifyEmailToken(token);
+    res.json(result);
+  } catch (err) {
+    console.error("❌ Error verifying email:", err);
+    res.status(500).json({ success: false, message: "Failed to verify email" });
+  }
+});
+
+// ⭐️ NEW AUTH ROUTES - Password Reset
+app.post("/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email required" });
+    }
+
+    // Don't reveal if email exists (security best practice)
+    const result = await sendPasswordResetEmail(email);
+    res.json({ success: true, message: "If an account exists, a password reset email has been sent" });
+  } catch (err) {
+    console.error("❌ Error sending password reset:", err);
+    res.status(500).json({ success: false, message: "Failed to send password reset email" });
+  }
+});
+
+app.post("/auth/reset-password", async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ success: false, message: "Token and new password required" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: "Password must be at least 6 characters" });
+    }
+
+    const result = await resetPassword(token, newPassword);
+    res.json(result);
+  } catch (err) {
+    console.error("❌ Error resetting password:", err);
+    res.status(500).json({ success: false, message: "Failed to reset password" });
   }
 });
 
