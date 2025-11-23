@@ -3,13 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <title>TheMove - Sign Up</title>
     <!-- ✅ Tailwind + Poppins -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <link rel="stylesheet" href="/styles.css" />
     <script>
       tailwind.config = {
         theme: {
@@ -17,7 +19,7 @@
             fontFamily: { sans: ["Poppins", "sans-serif"] },
             colors: {
               primary: "#4F46E5",
-              accent: "#3B82F6",
+              accent: "#6366F1",
               background: "#FAFAFA",
               dark: "#1E1B4B",
             },
@@ -29,134 +31,138 @@
 
   <body class="bg-background font-sans text-gray-800 flex flex-col min-h-screen">
     <!-- ✅ Navbar -->
-    <header
-      class="flex justify-between items-center px-6 py-4 bg-white shadow-md"
-    >
-      <a href="/index.html" class="text-2xl font-bold text-primary tracking-tight hover:text-indigo-700 transition">
-    TheMove
-  </a>
-      <nav class="flex items-center gap-4">
-        <a href="/login.html" class="text-gray-600 hover:text-primary font-medium"
-          >Login</a
-        >
-        <a
-          href="/signup.html"
-          class="bg-primary text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition"
-          >Join</a
-        >
-      </nav>
+    <header class="navbar">
+      <div class="navbar-container">
+        <a href="/" class="navbar-logo">TheMove</a>
+        <button class="navbar-mobile-toggle" id="mobileMenuToggle" aria-label="Toggle menu">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </button>
+        <nav class="navbar-nav" id="navbarNav">
+          <a href="/login" class="btn btn-secondary">Login</a>
+          <a href="/signup" class="btn btn-primary">Join</a>
+        </nav>
+      </div>
     </header>
+    <script>
+      document.getElementById('mobileMenuToggle')?.addEventListener('click', () => {
+        document.getElementById('navbarNav')?.classList.toggle('open');
+      });
+    </script>
 
-    <!-- ✅ Main Content (Centered) -->
-    <main
-      class="flex flex-col justify-center flex-grow mx-auto w-full max-w-md px-6 py-10 gap-4"
-    >
-      <h2 class="text-3xl font-semibold text-center text-dark mb-6">
-        Sign Up for TheMove
-      </h2>
+    <!-- ✅ Main Content -->
+    <main class="flex-grow flex items-center justify-center py-12 px-4">
+      <div class="container container-sm">
+        <div class="card max-w-md mx-auto fade-in">
+          <h1 class="heading-2 text-center mb-2">Sign Up for TheMove</h1>
+          <p class="text-muted text-center mb-8">Join other students discovering campus events</p>
 
-      <!-- Name -->
-      <input
-        id="name"
-        placeholder="Name"
-        class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none"
-      />
+          <form class="space-y-4" onsubmit="event.preventDefault();">
+            <div class="form-group">
+              <input
+                id="name"
+                placeholder="Name"
+                class="form-input"
+                required
+              />
+            </div>
 
-      <!-- School -->
-      <select
-        id="school"
-        class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none"
-      >
-        <option value="">Select your school</option>
-        <option value="UNC - Chapel Hill">UNC - Chapel Hill</option>
-      </select>
+            <div class="form-group">
+              <select id="school" class="form-input" required>
+                <option value="">Select your school</option>
+                <option value="UNC - Chapel Hill">UNC - Chapel Hill</option>
+              </select>
+            </div>
 
-      <!-- Class -->
-      <select
-        id="year"
-        onchange="toggleOtherClassInput()"
-        class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none"
-      >
-        <option value="">Select your class</option>
-        <option value="Freshman">Freshman</option>
-        <option value="Sophomore">Sophomore</option>
-        <option value="Junior">Junior</option>
-        <option value="Senior">Senior</option>
-        <option value="Other">Other</option>
-      </select>
+            <div class="form-group">
+              <select
+                id="year"
+                onchange="toggleOtherClassInput()"
+                class="form-input"
+                required
+              >
+                <option value="">Select your class</option>
+                <option value="Freshman">Freshman</option>
+                <option value="Sophomore">Sophomore</option>
+                <option value="Junior">Junior</option>
+                <option value="Senior">Senior</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
 
-      <input
-        id="other-year"
-        placeholder="Enter class"
-        class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none hidden"
-      />
+            <div class="form-group hidden" id="other-year-group">
+              <input
+                id="other-year"
+                placeholder="Enter class"
+                class="form-input"
+              />
+            </div>
 
-      <!-- Email -->
-      <input
-        id="email"
-        placeholder="School Email"
-        class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none"
-      />
+            <div class="form-group">
+              <input
+                id="email"
+                type="email"
+                placeholder="School Email"
+                class="form-input"
+                required
+              />
+            </div>
 
-      <!-- Password -->
-      <input
-        id="password"
-        type="password"
-        placeholder="Password"
-        class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none"
-      />
+            <div class="form-group">
+              <input
+                id="password"
+                type="password"
+                placeholder="Password"
+                class="form-input"
+                required
+              />
+            </div>
 
-      <input
-        id="confirm-password"
-        type="password"
-        placeholder="Verify Password"
-        class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none"
-      />
+            <div class="form-group">
+              <input
+                id="confirm-password"
+                type="password"
+                placeholder="Verify Password"
+                class="form-input"
+                required
+              />
+            </div>
 
-      <!-- Button -->
-      <button
-        id="sign-in-button"
-        class="bg-primary text-white w-full py-2.5 rounded-xl font-medium mt-2 hover:bg-indigo-700 transition shadow-md hover:shadow-lg"
-      >
-        Sign Up
-      </button>
+            <button
+              id="sign-in-button"
+              type="submit"
+              class="btn btn-primary btn-full btn-lg"
+            >
+              Sign Up
+            </button>
 
-      <p class="text-center text-sm text-gray-600 mt-3">
-        Already have an account?
-        <a href="/login.html" class="text-primary hover:underline">Login here</a>
-      </p>
+            <p class="text-center text-sm text-gray-600 mt-4">
+              Already have an account?
+              <a href="/login" class="text-primary hover:underline font-semibold">Login here</a>
+            </p>
+          </form>
+        </div>
+      </div>
     </main>
 
     <!-- ✅ Footer -->
-    <footer class="mt-auto text-center py-6 text-gray-500 text-sm">
-      © 2025 TheMove • Made with 🩵 at UNC
+    <footer class="mt-auto bg-white py-8 text-center border-t border-gray-200">
+      <div class="container">
+        <p class="text-muted">© 2025 TheMove • Made with 🩵 at UNC</p>
+      </div>
     </footer>
 
     <!-- ✅ Toast Notification -->
-    <div
-      id="toast"
-      class="fixed top-5 left-1/2 -translate-x-1/2 bg-white shadow-lg rounded-xl px-5 py-3 text-gray-800 font-medium border border-gray-200 opacity-0 pointer-events-none transition-all duration-300 z-50"
-    ></div>
+    <div id="toast" class="toast"></div>
 
     <script>
       function showToast(message, type = "info") {
         const toast = document.getElementById("toast");
-
-        const colors = {
-          info: "border-gray-300",
-          success: "border-green-400 bg-green-50 text-green-700",
-          error: "border-red-400 bg-red-50 text-red-700",
-          warning: "border-yellow-400 bg-yellow-50 text-yellow-700",
-        };
-
-        toast.className = `fixed top-5 left-1/2 -translate-x-1/2 rounded-xl px-5 py-3 font-medium text-center shadow-lg transition-all duration-300 z-50 ${colors[type]}`;
+        toast.className = `toast ${type} show`;
         toast.textContent = message;
-        toast.style.opacity = "1";
-        toast.style.pointerEvents = "auto";
-
         setTimeout(() => {
-          toast.style.opacity = "0";
-          toast.style.pointerEvents = "none";
+          toast.classList.remove("show");
         }, 3000);
       }
     </script>
@@ -167,7 +173,6 @@
       import {
         getAuth,
         createUserWithEmailAndPassword,
-        sendEmailVerification,
         setPersistence,
         browserLocalPersistence,
         signOut,
@@ -232,7 +237,6 @@
               email,
               password
             );
-            await sendEmailVerification(userCred.user);
 
             localStorage.setItem(
               "signupData",
@@ -240,7 +244,9 @@
             );
 
             const idToken = await userCred.user.getIdToken();
-            await fetch("https://api.usethemove.com/createUser", {
+            
+            // Create user in backend
+            await fetch("https://themove-backend-production.up.railway.app/createUser", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -255,12 +261,27 @@
               }),
             });
 
-            showToast(
-              "📨 Verification email sent! Please verify your email, then log in to continue.",
-              "success"
-            );
+            // Send verification email using new endpoint
+            const emailRes = await fetch("https://themove-backend-production.up.railway.app/auth/send-verification-email", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${idToken}`,
+              },
+            });
+
+            const emailData = await emailRes.json();
+            if (emailData.success) {
+              showToast(
+                "📨 Verification email sent! Please check your inbox and verify your email, then log in to continue.",
+                "success"
+              );
+            } else {
+              showToast("Account created, but verification email failed. Please try logging in.", "warning");
+            }
+
             await signOut(auth);
-            setTimeout(() => (window.location.href = "/login.html"), 2000);
+            setTimeout(() => (window.location.href = "/login"), 3000);
           } catch (err) {
             console.error("❌ Signup error:", err);
             showToast("Error: " + err.message, "error");
@@ -274,11 +295,14 @@
 
       window.toggleOtherClassInput = function () {
         const yearSelect = document.getElementById("year");
+        const otherYearGroup = document.getElementById("other-year-group");
         const otherYearInput = document.getElementById("other-year");
         if (yearSelect.value === "Other") {
-          otherYearInput.classList.remove("hidden");
+          otherYearGroup.classList.remove("hidden");
+          otherYearInput.required = true;
         } else {
-          otherYearInput.classList.add("hidden");
+          otherYearGroup.classList.add("hidden");
+          otherYearInput.required = false;
           otherYearInput.value = "";
         }
       };

@@ -3,11 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
   <title>TheMove Chat</title>
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
 
   <style>
     body {
@@ -51,9 +53,11 @@
 <body class="flex flex-col h-screen">
 
   <!-- Header -->
-  <header class="bg-white px-6 py-4 shadow flex justify-between items-center">
-    <h1 class="text-xl font-semibold text-indigo-700">TheMove Chat</h1>
-    <a href="/index.html" class="text-gray-600 hover:text-indigo-600 font-medium">Home</a>
+  <header class="navbar">
+    <div class="navbar-container">
+      <h1 class="navbar-logo text-xl">TheMove Chat</h1>
+      <a href="/" class="btn btn-secondary">Home</a>
+    </div>
   </header>
 
   <!-- Chat window -->
@@ -65,11 +69,11 @@
       id="chatInput"
       type="text"
       placeholder="Ask about events…"
-      class="flex-1 border rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-600 outline-none"
+      class="form-input flex-1"
     />
     <button
       onclick="sendMessage()"
-      class="bg-indigo-600 text-white px-4 py-3 rounded-xl font-medium hover:bg-indigo-700"
+      class="btn btn-primary"
     >
       Send
     </button>
@@ -106,7 +110,7 @@
       chatWindow.scrollTop = chatWindow.scrollHeight;
 
       // send request to backend
-      const res = await fetch("https://api.usethemove.com/chatJSON", {
+      const res = await fetch("https://themove-backend-production.up.railway.app/chatJSON", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),

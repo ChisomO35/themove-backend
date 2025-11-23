@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <title>TheMove - Verify Email</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Poppins", "sans-serif"] },
+            colors: {
+              primary: "#4F46E5",
+              accent: "#6366F1",
+              background: "#FAFAFA",
+              dark: "#1E1B4B",
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="bg-background font-sans text-gray-800 flex flex-col min-h-screen">
+    <!-- ✅ Navbar -->
+    <header class="navbar">
+      <div class="navbar-container">
+        <a href="/" class="navbar-logo">TheMove</a>
+      </div>
+    </header>
+
+    <!-- ✅ Main Content -->
+    <main class="flex-grow flex items-center justify-center py-12 px-4">
+      <div class="container container-sm">
+        <div class="card max-w-md mx-auto fade-in">
+          <div id="loading-state">
+            <h1 class="heading-2 text-center mb-4">Verifying Email...</h1>
+            <p class="text-muted text-center">Please wait while we verify your email address.</p>
+          </div>
+
+          <div id="success-state" class="hidden">
+            <div class="text-center mb-6">
+              <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
+                <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+              </div>
+              <h1 class="heading-2 mb-2">Email Verified!</h1>
+              <p class="text-muted">Your email has been successfully verified.</p>
+            </div>
+            <a href="/login" class="btn btn-primary btn-full">Continue to Login</a>
+          </div>
+
+          <div id="error-state" class="hidden">
+            <div class="text-center mb-6">
+              <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
+                <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </div>
+              <h1 class="heading-2 mb-2">Verification Failed</h1>
+              <p class="text-muted mb-4" id="error-message">The verification link is invalid or has expired.</p>
+            </div>
+            <a href="/login" class="btn btn-secondary btn-full">Back to Login</a>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script type="module">
+      // Get token from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get("token");
+
+      if (!token) {
+        document.getElementById("loading-state").classList.add("hidden");
+        document.getElementById("error-state").classList.remove("hidden");
+        document.getElementById("error-message").textContent = "No verification token provided.";
+        return;
+      }
+
+      // Verify email
+      async function verifyEmail() {
+        try {
+          const res = await fetch(`https://themove-backend-production.up.railway.app/auth/verify-email?token=${token}`);
+          const data = await res.json();
+
+          document.getElementById("loading-state").classList.add("hidden");
+
+          if (data.success) {
+            document.getElementById("success-state").classList.remove("hidden");
+          } else {
+            document.getElementById("error-state").classList.remove("hidden");
+            document.getElementById("error-message").textContent = data.message || "Verification failed.";
+          }
+        } catch (err) {
+          console.error("❌ Verification error:", err);
+          document.getElementById("loading-state").classList.add("hidden");
+          document.getElementById("error-state").classList.remove("hidden");
+          document.getElementById("error-message").textContent = "An error occurred. Please try again.";
+        }
+      }
+
+      verifyEmail();
+    </script>
+  </body>
+</html>
+

@@ -35,7 +35,7 @@ async function sendMessage() {
   showTyping();
 
   // 🔥 NEW: Call backend JSON endpoint
-  const res = await fetch("https://api.usethemove.com/chatJSON", {
+  const res = await fetch("https://themove-backend-production.up.railway.app/chatJSON", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message: text })

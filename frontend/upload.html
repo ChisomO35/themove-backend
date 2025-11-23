@@ -2,12 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <title>TheMove - Upload Poster</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <link rel="stylesheet" href="/styles.css" />
     <script>
       tailwind.config = {
         theme: {
@@ -27,31 +30,30 @@
 
   <body class="bg-background text-gray-800 font-sans min-h-screen flex flex-col">
     <!-- ✅ Navbar -->
-    <header
-      class="flex justify-between items-center px-6 py-4 bg-white shadow-sm sticky top-0 z-50"
-    >
-      <a
-        href="/index.html"
-        class="text-2xl font-bold text-primary tracking-tight hover:text-indigo-700 transition"
-        >TheMove</a
-      >
-      <nav class="flex items-center gap-5 text-sm font-medium">
-        <a
-          href="/index.html"
-          class="border border-primary text-primary px-4 py-2 rounded-xl hover:bg-indigo-50 transition"
-          >Home</a
-        >
-      </nav>
+    <header class="navbar">
+      <div class="navbar-container">
+        <a href="/" class="navbar-logo">TheMove</a>
+        <button class="navbar-mobile-toggle" id="mobileMenuToggle" aria-label="Toggle menu">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </button>
+        <nav class="navbar-nav" id="navbarNav">
+          <a href="/" class="btn btn-secondary">Home</a>
+        </nav>
+      </div>
     </header>
+    <script>
+      document.getElementById('mobileMenuToggle')?.addEventListener('click', () => {
+        document.getElementById('navbarNav')?.classList.toggle('open');
+      });
+    </script>
 
     <!-- ✅ Upload Section -->
-    <main
-      class="flex-grow flex items-center justify-center px-6 py-12 bg-gradient-to-br from-indigo-50 to-white"
-    >
-      <div class="bg-white shadow-md rounded-2xl p-8 w-full max-w-md">
-        <h2 class="text-2xl font-bold text-dark mb-6 text-center">
-          Upload a Poster 📤
-        </h2>
+    <main class="flex-grow flex items-center justify-center py-12 px-4 bg-gradient-to-br from-indigo-50 to-white">
+      <div class="container container-sm">
+        <div class="card max-w-md mx-auto fade-in">
+          <h1 class="heading-2 text-center mb-6">Upload a Poster 📤</h1>
 
         <form id="upload-form" class="flex flex-col gap-5">
           <div>
@@ -64,19 +66,17 @@
               type="file"
               accept="image/*"
               required
-              class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-primary focus:outline-none"
+              class="form-input"
             />
           </div>
 
-          <div>
-            <label for="school" class="block font-medium mb-2 text-gray-700"
-              >School</label
-            >
+          <div class="form-group">
+            <label for="school" class="form-label">School</label>
             <select
               id="school"
               name="school"
               required
-              class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-primary focus:outline-none"
+              class="form-input"
             >
               <option value="UNC-Chapel Hill">UNC-Chapel Hill</option>
             </select>
@@ -84,7 +84,7 @@
 
           <button
             type="submit"
-            class="bg-primary text-white w-full py-3 rounded-xl font-medium hover:bg-indigo-700 transition"
+            class="btn btn-primary btn-full btn-lg"
           >
             Upload Poster
           </button>
@@ -94,13 +94,16 @@
         <div
           id="toast"
           class="hidden mt-5 text-center px-4 py-3 rounded-xl font-medium"
-        ></div>
+        >          </div>
+        </div>
       </div>
     </main>
 
     <!-- ✅ Footer -->
-    <footer class="bg-white py-6 text-center text-gray-500 text-sm border-t">
-      <p>© 2025 TheMove. Made with 🩵 at UNC.</p>
+    <footer class="mt-auto bg-white py-8 text-center border-t border-gray-200">
+      <div class="container">
+        <p class="text-muted">© 2025 TheMove • Made with 🩵 at UNC</p>
+      </div>
     </footer>
 
     <!-- ✅ JS Logic -->
@@ -114,7 +117,7 @@
         const formData = new FormData(form);
 
         try {
-          const response = await fetch("https://api.usethemove.com/extract", {
+          const response = await fetch("https://themove-backend-production.up.railway.app/extract", {
             method: "POST",
             body: formData,
           });
