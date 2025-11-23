@@ -875,20 +875,20 @@ async function searchPostersForSMS(query, school) {
     return `🙁 I couldn't find any upcoming events that match. ${suggestion}`;
   }
 
-  // ✅ Clean SMS formatting with emojis - optimized for mobile readability
+  // ✅ Clean SMS formatting with emojis - optimized for mobile readability and carrier limits
   let msg = `🎯 Found ${topResults.length} ${topResults.length === 1 ? 'match' : 'matches'}:\n\n`;
   
   topResults.forEach((match, i) => {
     // Number and title with emoji
     msg += `${i + 1}️⃣ ${match.metadata.title}\n`;
     
-    // Organization name (if different from title)
+    // Organization name (if different from title) - make it more compact
     if (match.metadata.organization_name && 
         match.metadata.organization_name.toLowerCase() !== match.metadata.title.toLowerCase()) {
       msg += `by ${match.metadata.organization_name}\n`;
     }
     
-    // Date and time (compact format with emojis)
+    // Date and time (compact format with emojis) - combine on one line
     const dateTimeParts = [];
     if (match.metadata.date_normalized) {
       const eventDate = getLocalDateFromISO(match.metadata.date_normalized);
@@ -908,12 +908,12 @@ async function searchPostersForSMS(query, school) {
       msg += `${dateTimeParts.join(' • ')}\n`;
     }
     
-    // Location (if available)
+    // Location (if available) - compact
     if (match.metadata.location) {
       msg += `📍 ${match.metadata.location}\n`;
     }
     
-    // Cost (if available)
+    // Cost (if available) - only show if not free or if explicitly mentioned
     const cost = (match.metadata.cost || "").trim();
     if (cost) {
       const costLower = cost.toLowerCase();
@@ -925,13 +925,8 @@ async function searchPostersForSMS(query, school) {
       }
     }
     
-    // Tags (brief, max 2) - only if available
-    const tags = match.metadata.tags ? match.metadata.tags.split(", ").filter(t => t.trim()).slice(0, 2) : [];
-    if (tags.length > 0) {
-      msg += `🏷️ ${tags.join(", ")}\n`;
-    }
-    
-    // Link with emoji
+    // Tags - removed to save space (users can click link for more info)
+    // Link with emoji - shortened URL if possible
     msg += `🔗 ${BASE_URL}/poster/${match.id}`;
     
     // Spacing between results - double line break
