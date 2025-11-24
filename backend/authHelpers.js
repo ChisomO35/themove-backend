@@ -40,23 +40,20 @@ function generateSecureToken() {
 // Normalize phone number to E.164 format
 function normalizePhoneToE164(phone) {
   if (!phone) {
-    throw new Error("No phone number provided");
+    throw new Error("Missing phone number");
   }
 
-  // Remove all non-digit characters
-  let p = String(phone).replace(/\D/g, "");
+  const digits = String(phone).replace(/\D/g, "");
 
-  // Must be 10 digits for US
-  if (p.length === 10) {
-    return `+1${p}`;
+  if (digits.length === 10) {
+    return `+1${digits}`;
   }
 
-  // Already includes country code
-  if (p.length === 11 && p.startsWith("1")) {
-    return `+${p}`;
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return `+${digits}`;
   }
 
-  throw new Error(`Invalid US phone number: ${phone}`);
+  throw new Error("Invalid US phone number");
 }
 
 // Send SMS verification code via Twilio

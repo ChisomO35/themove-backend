@@ -1367,35 +1367,27 @@ app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
       return res.status(400).json({ success: false, message: "Phone and code required" });
     }
 
-    // Normalize phone number to E.164 format (must match the format used when code was sent)
-    let normalized;
-    try {
-      normalized = normalizePhoneToE164(phone);
-      console.log(`🔍 [Verify Phone] Normalized phone (E.164): ${normalized} (from: ${phone})`);
-    } catch (normalizeErr) {
-      console.error(`❌ [Verify Phone] Normalization error:`, normalizeErr.message);
-      return res.status(400).json({ 
-        success: false, 
-        message: `Invalid phone number format: ${normalizeErr.message}. Please use format: +1XXXXXXXXXX` 
-      });
-    }
-    
-    // normalizePhoneToE164 already validates and throws if invalid, so we can trust the result
-    if (!/^\+1\d{10}$/.test(normalized)) {
-      console.error(`❌ [Verify Phone] Invalid phone format after normalization: ${phone} -> ${normalized}`);
-      return res.status(400).json({ 
-        success: false, 
-        message: "Invalid phone number format. Please use format: +1XXXXXXXXXX" 
-      });
-    }
-
-    // Verify the code with normalized phone
-    const result = verifyPhoneCode(normalized, code);
+    // Verify the code - verifyPhoneCode will normalize the phone number internally
+    // DO NOT normalize here, let verifyPhoneCode handle it to ensure consistency
+    const result = verifyPhoneCode(phone, code);
     console.log(`🔍 [Verify Phone] Verification result:`, result);
 
     if (result.success) {
       const uid = req.user.uid;
       console.log(`✅ [Verify Phone] Code verified, updating user ${uid}`);
+      
+      // Now normalize the phone number for Firebase/Firestore (using same function as verifyPhoneCode)
+      let normalized;
+      try {
+        normalized = normalizePhoneToE164(phone);
+        console.log(`🔍 [Verify Phone] Normalized phone for Firebase: ${normalized}`);
+      } catch (normalizeErr) {
+        console.error(`❌ [Verify Phone] Normalization error:`, normalizeErr.message);
+        return res.status(500).json({ 
+          success: false, 
+          message: "Code verified but failed to normalize phone number. Please try again." 
+        });
+      }
       
       // Final validation - ensure normalized is valid before using
       if (!normalized || typeof normalized !== 'string' || !/^\+1\d{10}$/.test(normalized)) {
@@ -1406,26 +1398,38 @@ app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
         });
       }
       
+      let firebaseSuccess = false;
+      let firestoreSuccess = false;
+      
       try {
         // Link phone to user in Firebase Auth (must be E.164 format)
         console.log(`🔍 [Verify Phone] Attempting Firebase Auth update with phone: "${normalized}" (type: ${typeof normalized}, length: ${normalized.length})`);
         await admin.auth().updateUser(uid, { phoneNumber: normalized });
         console.log(`✅ [Verify Phone] Firebase Auth updated for ${uid} with phone: ${normalized}`);
+        firebaseSuccess = true;
       } catch (firebaseErr) {
         console.error("❌ [Verify Phone] Firebase Auth update error:", firebaseErr);
         console.error("❌ [Verify Phone] Firebase Auth error details:", firebaseErr.message, firebaseErr.code);
         console.error("❌ [Verify Phone] Phone number that failed:", normalized, `(type: ${typeof normalized}, length: ${normalized?.length})`);
-        // Continue even if Firebase Auth update fails - we'll still update Firestore
       }
       
       try {
         // Update in Firestore
         await db.collection("users").doc(uid).update({ phone: normalized });
         console.log(`✅ [Verify Phone] Firestore updated for ${uid}`);
+        firestoreSuccess = true;
       } catch (firestoreErr) {
         console.error("❌ [Verify Phone] Firestore update error:", firestoreErr);
         console.error("❌ [Verify Phone] Firestore error details:", firestoreErr.message, firestoreErr.code);
-        // Return error if Firestore update fails
+      }
+      
+      // Only return success if at least one update succeeded
+      if (firebaseSuccess || firestoreSuccess) {
+        return res.json({ 
+          success: true, 
+          message: "Phone number verified and saved successfully" 
+        });
+      } else {
         return res.status(500).json({ 
           success: false, 
           message: "Code verified but failed to save phone number. Please try again." 
@@ -1433,6 +1437,7 @@ app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
       }
     }
     
+    // If verification failed, return the error
     res.json(result);
   } catch (err) {
     console.error("❌ [Verify Phone] Unexpected error verifying phone code:", err);
