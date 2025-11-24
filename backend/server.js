@@ -1346,6 +1346,7 @@ app.post("/cleanupExpiredPosters", async (req, res) => {
 app.post("/auth/send-phone-code", verifyFirebaseToken, async (req, res) => {
   try {
     const { phone } = req.body;
+    console.log(`📌 [Send Phone Code] RAW PHONE RECEIVED:`, JSON.stringify(phone));
     if (!phone) {
       return res.status(400).json({ success: false, message: "Phone number required" });
     }
@@ -1361,6 +1362,7 @@ app.post("/auth/send-phone-code", verifyFirebaseToken, async (req, res) => {
 app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
   try {
     const { phone, code } = req.body;
+    console.log(`📌 [Verify Phone] RAW PHONE RECEIVED:`, JSON.stringify(phone));
     console.log(`🔍 [Verify Phone] Request received - phone: ${phone ? phone.substring(0, 5) + '...' : 'missing'}, code: ${code ? 'present' : 'missing'}`);
     
     if (!phone || !code) {

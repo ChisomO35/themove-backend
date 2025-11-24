@@ -229,6 +229,8 @@
       }
     </script>
 
+    <!-- ✅ Firebase Config (loads from external file, gitignored) -->
+    <script src="/firebase-config.js"></script>
     <!-- ✅ Firebase + Logic -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
@@ -237,8 +239,9 @@
         onAuthStateChanged,
       } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 
-      const firebaseConfig = {
-        apiKey: "AIzaSyDuHcTFbqy9e0nov4eKHNTp89WVcQOrlTQ",
+      // Firebase config loaded from external file (not in git)
+      const firebaseConfig = window.__FIREBASE_CONFIG__ || {
+        apiKey: "",
         authDomain: "themove-c75d3.firebaseapp.com",
         projectId: "themove-c75d3",
         storageBucket: "themove-c75d3.firebasestorage.app",
@@ -264,7 +267,8 @@
       });
 
       window.verifyPhoneNumber = async function () {
-        const phone = document.getElementById("phone").value.trim();
+        // Strip all non-digit characters before sending to backend
+        const phone = document.getElementById("phone").value.replace(/\D/g, "").trim();
         if (!phone) {
           showToast("Please enter a valid phone number first.", "warning");
           return;
@@ -340,7 +344,8 @@
       });
 
       window.handleSubmit = async function () {
-        const phone = document.getElementById("phone").value.trim();
+        // Strip all non-digit characters before sending to backend
+        const phone = document.getElementById("phone").value.replace(/\D/g, "").trim();
         const dorm = document.getElementById("dorm").value.trim();
         const selectedTags = Array.from(document.querySelectorAll(".tag.bg-primary")).map(
           (t) => t.textContent
