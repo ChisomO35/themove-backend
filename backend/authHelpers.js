@@ -73,34 +73,54 @@ async function sendPhoneVerificationCode(phoneNumber) {
 
 // Verify phone code
 function verifyPhoneCode(phoneNumber, code) {
-  const normalized = phoneNumber.replace(/\s+/g, "");
-  const normalizedWithPlus = normalized.startsWith("+1") ? normalized : "+1" + normalized;
+  try {
+    // Phone number should already be normalized when passed in
+    const normalized = phoneNumber.replace(/\s+/g, "");
+    const normalizedWithPlus = normalized.startsWith("+1") ? normalized : "+1" + normalized;
 
-  const stored = phoneVerificationCodes.get(normalizedWithPlus);
+    console.log(`🔍 [verifyPhoneCode] Looking up code for: ${normalizedWithPlus}`);
+    console.log(`🔍 [verifyPhoneCode] Stored codes keys:`, Array.from(phoneVerificationCodes.keys()));
 
-  if (!stored) {
-    return { success: false, message: "No verification code found. Please request a new code." };
-  }
+    const stored = phoneVerificationCodes.get(normalizedWithPlus);
 
-  if (Date.now() > stored.expiresAt) {
+    if (!stored) {
+      console.warn(`⚠️ [verifyPhoneCode] No code found for: ${normalizedWithPlus}`);
+      return { success: false, message: "No verification code found. Please request a new code." };
+    }
+
+    if (Date.now() > stored.expiresAt) {
+      console.warn(`⚠️ [verifyPhoneCode] Code expired for: ${normalizedWithPlus}`);
+      phoneVerificationCodes.delete(normalizedWithPlus);
+      return { success: false, message: "Verification code expired. Please request a new code." };
+    }
+
+    if (stored.attempts >= 5) {
+      console.warn(`⚠️ [verifyPhoneCode] Too many attempts for: ${normalizedWithPlus}`);
+      phoneVerificationCodes.delete(normalizedWithPlus);
+      return { success: false, message: "Too many attempts. Please request a new code." };
+    }
+
+    stored.attempts++;
+
+    // Ensure both are strings for comparison
+    const storedCode = String(stored.code);
+    const providedCode = String(code).trim();
+
+    console.log(`🔍 [verifyPhoneCode] Comparing codes - stored: ${storedCode}, provided: ${providedCode}`);
+
+    if (storedCode !== providedCode) {
+      console.warn(`⚠️ [verifyPhoneCode] Code mismatch for: ${normalizedWithPlus}`);
+      return { success: false, message: "Invalid verification code." };
+    }
+
+    // Code is valid - remove it
     phoneVerificationCodes.delete(normalizedWithPlus);
-    return { success: false, message: "Verification code expired. Please request a new code." };
+    console.log(`✅ [verifyPhoneCode] Code verified successfully for: ${normalizedWithPlus}`);
+    return { success: true, message: "Phone number verified" };
+  } catch (error) {
+    console.error("❌ [verifyPhoneCode] Error:", error);
+    return { success: false, message: "Error verifying code: " + error.message };
   }
-
-  if (stored.attempts >= 5) {
-    phoneVerificationCodes.delete(normalizedWithPlus);
-    return { success: false, message: "Too many attempts. Please request a new code." };
-  }
-
-  stored.attempts++;
-
-  if (stored.code !== code) {
-    return { success: false, message: "Invalid verification code." };
-  }
-
-  // Code is valid - remove it
-  phoneVerificationCodes.delete(normalizedWithPlus);
-  return { success: true, message: "Phone number verified" };
 }
 
 // Send email verification (using proper email service)

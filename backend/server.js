@@ -1360,19 +1360,26 @@ app.post("/auth/send-phone-code", verifyFirebaseToken, async (req, res) => {
 app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
   try {
     const { phone, code } = req.body;
+    console.log(`🔍 [Verify Phone] Request received - phone: ${phone ? phone.substring(0, 5) + '...' : 'missing'}, code: ${code ? 'present' : 'missing'}`);
+    
     if (!phone || !code) {
       return res.status(400).json({ success: false, message: "Phone and code required" });
     }
 
-    const result = verifyPhoneCode(phone, code);
-    if (result.success) {
-      // Normalize phone number for storage (same format as used in verification)
-      let normalized = phone.replace(/\s+/g, "");
-      if (!normalized.startsWith("+1")) {
-        normalized = "+1" + normalized;
-      }
+    // Normalize phone number (must match the format used when code was sent)
+    let normalized = phone.replace(/\s+/g, "");
+    if (!normalized.startsWith("+1")) {
+      normalized = "+1" + normalized;
+    }
+    console.log(`🔍 [Verify Phone] Normalized phone: ${normalized}`);
 
+    // Verify the code with normalized phone
+    const result = verifyPhoneCode(normalized, code);
+    console.log(`🔍 [Verify Phone] Verification result:`, result);
+
+    if (result.success) {
       const uid = req.user.uid;
+      console.log(`✅ [Verify Phone] Code verified, updating user ${uid}`);
       
       try {
         // Link phone to user in Firebase Auth
@@ -1380,6 +1387,7 @@ app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
         console.log(`✅ [Verify Phone] Firebase Auth updated for ${uid}`);
       } catch (firebaseErr) {
         console.error("❌ [Verify Phone] Firebase Auth update error:", firebaseErr);
+        console.error("❌ [Verify Phone] Firebase Auth error details:", firebaseErr.message, firebaseErr.code);
         // Continue even if Firebase Auth update fails - we'll still update Firestore
       }
       
@@ -1389,6 +1397,7 @@ app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
         console.log(`✅ [Verify Phone] Firestore updated for ${uid}`);
       } catch (firestoreErr) {
         console.error("❌ [Verify Phone] Firestore update error:", firestoreErr);
+        console.error("❌ [Verify Phone] Firestore error details:", firestoreErr.message, firestoreErr.code);
         // Return error if Firestore update fails
         return res.status(500).json({ 
           success: false, 
@@ -1396,11 +1405,12 @@ app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
         });
       }
     }
+    
     res.json(result);
   } catch (err) {
-    console.error("❌ [Verify Phone] Error verifying phone code:", err);
+    console.error("❌ [Verify Phone] Unexpected error verifying phone code:", err);
     console.error("❌ [Verify Phone] Error stack:", err.stack);
-    res.status(500).json({ success: false, message: "Failed to verify code" });
+    res.status(500).json({ success: false, message: "Failed to verify code: " + err.message });
   }
 });
 
