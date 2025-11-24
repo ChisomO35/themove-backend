@@ -68,6 +68,7 @@ const {
   sendPasswordResetEmail,
   verifyPasswordResetToken,
   resetPassword,
+  normalizePhoneToE164,
 } = require("./authHelpers");
 
 // -------------------------
@@ -1366,12 +1367,19 @@ app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
       return res.status(400).json({ success: false, message: "Phone and code required" });
     }
 
-    // Normalize phone number (must match the format used when code was sent)
-    let normalized = phone.replace(/\s+/g, "");
-    if (!normalized.startsWith("+1")) {
-      normalized = "+1" + normalized;
+    // Normalize phone number to E.164 format (must match the format used when code was sent)
+    const normalized = normalizePhoneToE164(phone);
+    
+    // Validate E.164 format: must be +1 followed by 10 digits
+    if (!/^\+1\d{10}$/.test(normalized)) {
+      console.error(`❌ [Verify Phone] Invalid phone format: ${phone} -> ${normalized}`);
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid phone number format. Please use format: +1XXXXXXXXXX" 
+      });
     }
-    console.log(`🔍 [Verify Phone] Normalized phone: ${normalized}`);
+    
+    console.log(`🔍 [Verify Phone] Normalized phone (E.164): ${normalized}`);
 
     // Verify the code with normalized phone
     const result = verifyPhoneCode(normalized, code);
@@ -1382,9 +1390,9 @@ app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
       console.log(`✅ [Verify Phone] Code verified, updating user ${uid}`);
       
       try {
-        // Link phone to user in Firebase Auth
+        // Link phone to user in Firebase Auth (must be E.164 format)
         await admin.auth().updateUser(uid, { phoneNumber: normalized });
-        console.log(`✅ [Verify Phone] Firebase Auth updated for ${uid}`);
+        console.log(`✅ [Verify Phone] Firebase Auth updated for ${uid} with phone: ${normalized}`);
       } catch (firebaseErr) {
         console.error("❌ [Verify Phone] Firebase Auth update error:", firebaseErr);
         console.error("❌ [Verify Phone] Firebase Auth error details:", firebaseErr.message, firebaseErr.code);

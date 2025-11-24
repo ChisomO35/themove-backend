@@ -37,13 +37,44 @@ function generateSecureToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
+// Normalize phone number to E.164 format
+function normalizePhoneToE164(phoneNumber) {
+  // Remove all non-digit characters except +
+  let cleaned = phoneNumber.replace(/[^\d+]/g, "");
+  
+  // Remove leading + if present
+  if (cleaned.startsWith("+")) {
+    cleaned = cleaned.substring(1);
+  }
+  
+  // If it starts with 1 and has 11 digits, add +
+  if (cleaned.startsWith("1") && cleaned.length === 11) {
+    return "+" + cleaned;
+  }
+  // If it has 10 digits (US number without country code), add +1
+  else if (cleaned.length === 10) {
+    return "+1" + cleaned;
+  }
+  // If it already has +1, return as is
+  else if (cleaned.startsWith("1") && cleaned.length > 11) {
+    return "+" + cleaned;
+  }
+  // Default: assume it needs +1
+  else {
+    return "+1" + cleaned.replace(/^1/, "");
+  }
+}
+
 // Send SMS verification code via Twilio
 async function sendPhoneVerificationCode(phoneNumber) {
   try {
-    // Normalize phone number
-    let normalized = phoneNumber.replace(/\s+/g, "");
-    if (!normalized.startsWith("+1")) {
-      normalized = "+1" + normalized;
+    // Normalize phone number to E.164 format
+    const normalized = normalizePhoneToE164(phoneNumber);
+    
+    // Validate E.164 format
+    if (!/^\+1\d{10}$/.test(normalized)) {
+      console.error(`❌ Invalid phone format: ${phoneNumber} -> ${normalized}`);
+      return { success: false, message: "Invalid phone number format" };
     }
 
     // Generate code
@@ -74,9 +105,16 @@ async function sendPhoneVerificationCode(phoneNumber) {
 // Verify phone code
 function verifyPhoneCode(phoneNumber, code) {
   try {
-    // Phone number should already be normalized when passed in
-    const normalized = phoneNumber.replace(/\s+/g, "");
-    const normalizedWithPlus = normalized.startsWith("+1") ? normalized : "+1" + normalized;
+    // Normalize phone number to E.164 format (must match format used when code was sent)
+    const normalized = normalizePhoneToE164(phoneNumber);
+    
+    // Validate E.164 format
+    if (!/^\+1\d{10}$/.test(normalized)) {
+      console.error(`❌ [verifyPhoneCode] Invalid phone format: ${phoneNumber} -> ${normalized}`);
+      return { success: false, message: "Invalid phone number format" };
+    }
+    
+    const normalizedWithPlus = normalized;
 
     console.log(`🔍 [verifyPhoneCode] Looking up code for: ${normalizedWithPlus}`);
     console.log(`🔍 [verifyPhoneCode] Stored codes keys:`, Array.from(phoneVerificationCodes.keys()));
@@ -403,5 +441,6 @@ module.exports = {
   sendPasswordResetEmail,
   verifyPasswordResetToken,
   resetPassword,
+  normalizePhoneToE164,
 };
 
