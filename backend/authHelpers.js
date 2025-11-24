@@ -38,50 +38,25 @@ function generateSecureToken() {
 }
 
 // Normalize phone number to E.164 format
-function normalizePhoneToE164(phoneNumber) {
-  if (!phoneNumber) {
+function normalizePhoneToE164(phone) {
+  if (!phone) {
     throw new Error("No phone number provided");
   }
-  
-  // Convert to string if not already
-  const phoneStr = String(phoneNumber).trim();
-  
-  if (!phoneStr) {
-    throw new Error("Phone number is empty");
-  }
-  
+
   // Remove all non-digit characters
-  let digits = phoneStr.replace(/\D/g, "");
-  
-  if (!digits || digits.length === 0) {
-    throw new Error(`Phone number contains no digits: ${phoneNumber}`);
+  let p = String(phone).replace(/\D/g, "");
+
+  // Must be 10 digits for US
+  if (p.length === 10) {
+    return `+1${p}`;
   }
-  
-  // Must be 10 digits for US (without country code)
-  if (digits.length === 10) {
-    return `+1${digits}`;
+
+  // Already includes country code
+  if (p.length === 11 && p.startsWith("1")) {
+    return `+${p}`;
   }
-  
-  // Already includes country code (11 digits starting with 1)
-  if (digits.length === 11 && digits.startsWith("1")) {
-    return `+${digits}`;
-  }
-  
-  // If longer, try to extract valid number
-  if (digits.length > 11 && digits.startsWith("1")) {
-    // Take first 11 digits
-    return `+${digits.substring(0, 11)}`;
-  }
-  
-  // If 10 digits at the end, use those
-  if (digits.length > 10) {
-    const last10 = digits.slice(-10);
-    if (last10.length === 10) {
-      return `+1${last10}`;
-    }
-  }
-  
-  throw new Error(`Invalid US phone number: ${phoneNumber} (extracted digits: ${digits}, length: ${digits.length})`);
+
+  throw new Error(`Invalid US phone number: ${phone}`);
 }
 
 // Send SMS verification code via Twilio
@@ -89,12 +64,6 @@ async function sendPhoneVerificationCode(phoneNumber) {
   try {
     // Normalize phone number to E.164 format
     const normalized = normalizePhoneToE164(phoneNumber);
-    
-    // Validate E.164 format
-    if (!/^\+1\d{10}$/.test(normalized)) {
-      console.error(`❌ Invalid phone format: ${phoneNumber} -> ${normalized}`);
-      return { success: false, message: "Invalid phone number format" };
-    }
 
     // Generate code
     const code = generateVerificationCode();
@@ -126,34 +95,26 @@ function verifyPhoneCode(phoneNumber, code) {
   try {
     // Normalize phone number to E.164 format (must match format used when code was sent)
     const normalized = normalizePhoneToE164(phoneNumber);
-    
-    // Validate E.164 format
-    if (!/^\+1\d{10}$/.test(normalized)) {
-      console.error(`❌ [verifyPhoneCode] Invalid phone format: ${phoneNumber} -> ${normalized}`);
-      return { success: false, message: "Invalid phone number format" };
-    }
-    
-    const normalizedWithPlus = normalized;
 
-    console.log(`🔍 [verifyPhoneCode] Looking up code for: ${normalizedWithPlus}`);
+    console.log(`🔍 [verifyPhoneCode] Looking up code for: ${normalized}`);
     console.log(`🔍 [verifyPhoneCode] Stored codes keys:`, Array.from(phoneVerificationCodes.keys()));
 
-    const stored = phoneVerificationCodes.get(normalizedWithPlus);
+    const stored = phoneVerificationCodes.get(normalized);
 
     if (!stored) {
-      console.warn(`⚠️ [verifyPhoneCode] No code found for: ${normalizedWithPlus}`);
+      console.warn(`⚠️ [verifyPhoneCode] No code found for: ${normalized}`);
       return { success: false, message: "No verification code found. Please request a new code." };
     }
 
     if (Date.now() > stored.expiresAt) {
-      console.warn(`⚠️ [verifyPhoneCode] Code expired for: ${normalizedWithPlus}`);
-      phoneVerificationCodes.delete(normalizedWithPlus);
+      console.warn(`⚠️ [verifyPhoneCode] Code expired for: ${normalized}`);
+      phoneVerificationCodes.delete(normalized);
       return { success: false, message: "Verification code expired. Please request a new code." };
     }
 
     if (stored.attempts >= 5) {
-      console.warn(`⚠️ [verifyPhoneCode] Too many attempts for: ${normalizedWithPlus}`);
-      phoneVerificationCodes.delete(normalizedWithPlus);
+      console.warn(`⚠️ [verifyPhoneCode] Too many attempts for: ${normalized}`);
+      phoneVerificationCodes.delete(normalized);
       return { success: false, message: "Too many attempts. Please request a new code." };
     }
 
@@ -166,13 +127,13 @@ function verifyPhoneCode(phoneNumber, code) {
     console.log(`🔍 [verifyPhoneCode] Comparing codes - stored: ${storedCode}, provided: ${providedCode}`);
 
     if (storedCode !== providedCode) {
-      console.warn(`⚠️ [verifyPhoneCode] Code mismatch for: ${normalizedWithPlus}`);
+      console.warn(`⚠️ [verifyPhoneCode] Code mismatch for: ${normalized}`);
       return { success: false, message: "Invalid verification code." };
     }
 
     // Code is valid - remove it
-    phoneVerificationCodes.delete(normalizedWithPlus);
-    console.log(`✅ [verifyPhoneCode] Code verified successfully for: ${normalizedWithPlus}`);
+    phoneVerificationCodes.delete(normalized);
+    console.log(`✅ [verifyPhoneCode] Code verified successfully for: ${normalized}`);
     return { success: true, message: "Phone number verified" };
   } catch (error) {
     console.error("❌ [verifyPhoneCode] Error:", error);

@@ -1380,8 +1380,8 @@ app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
       });
     }
     
-    // Double-check E.164 format: must be +1 followed by exactly 10 digits
-    if (!normalized || !/^\+1\d{10}$/.test(normalized)) {
+    // normalizePhoneToE164 already validates and throws if invalid, so we can trust the result
+    if (!/^\+1\d{10}$/.test(normalized)) {
       console.error(`❌ [Verify Phone] Invalid phone format after normalization: ${phone} -> ${normalized}`);
       return res.status(400).json({ 
         success: false, 
@@ -1397,14 +1397,18 @@ app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
       const uid = req.user.uid;
       console.log(`✅ [Verify Phone] Code verified, updating user ${uid}`);
       
+      // Final validation - ensure normalized is valid before using
+      if (!normalized || typeof normalized !== 'string' || !/^\+1\d{10}$/.test(normalized)) {
+        console.error(`❌ [Verify Phone] CRITICAL: normalized phone is invalid before Firebase update:`, normalized);
+        return res.status(500).json({ 
+          success: false, 
+          message: "Internal error: Invalid phone number format" 
+        });
+      }
+      
       try {
-        // Validate phone number one more time before sending to Firebase
-        if (!normalized || normalized.length !== 12 || !normalized.startsWith('+1')) {
-          throw new Error(`Invalid phone format before Firebase update: ${normalized}`);
-        }
-        
         // Link phone to user in Firebase Auth (must be E.164 format)
-        console.log(`🔍 [Verify Phone] Attempting Firebase Auth update with phone: "${normalized}" (length: ${normalized.length})`);
+        console.log(`🔍 [Verify Phone] Attempting Firebase Auth update with phone: "${normalized}" (type: ${typeof normalized}, length: ${normalized.length})`);
         await admin.auth().updateUser(uid, { phoneNumber: normalized });
         console.log(`✅ [Verify Phone] Firebase Auth updated for ${uid} with phone: ${normalized}`);
       } catch (firebaseErr) {
