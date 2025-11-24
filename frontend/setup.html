@@ -290,7 +290,7 @@
             showToast("📱 Verification code sent! Check your phone.", "success");
             document.getElementById("code-modal").classList.remove("hidden");
             document.getElementById("code-modal").classList.add("flex");
-            // Store phone for verification
+            // Store cleaned phone for verification (already stripped of non-digits)
             window.pendingPhone = phone;
           } else {
             showToast(data.message || "Error sending code.", "error");
