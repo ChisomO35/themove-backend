@@ -11,14 +11,21 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
+// Get Firestore instance (will use existing admin app if already initialized)
+let db;
+try {
+  db = admin.firestore();
+} catch (error) {
+  // If admin not initialized yet, it will be initialized in server.js
+  // We'll get db lazily when needed
+}
+
 // Phone verification code storage (in production, use Redis or Firestore)
+// Note: Phone codes are short-lived (10 min) so in-memory is acceptable for now
 const phoneVerificationCodes = new Map(); // { phone: { code, expiresAt, attempts } }
 
-// Email verification token storage
-const emailVerificationTokens = new Map(); // { token: { uid, email, expiresAt } }
-
-// Password reset token storage
-const passwordResetTokens = new Map(); // { token: { uid, email, expiresAt } }
+// Note: Email and password reset tokens are stored in Firestore for persistence
+// This ensures tokens survive Railway container restarts
 
 // Generate 6-digit code
 function generateVerificationCode() {
@@ -99,12 +106,22 @@ function verifyPhoneCode(phoneNumber, code) {
 // Send email verification (using proper email service)
 async function sendEmailVerification(uid, email) {
   try {
+    // Ensure Firestore is available
+    if (!db) {
+      db = admin.firestore();
+    }
+
     // Generate token
     const token = generateSecureToken();
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
-    // Store token
-    emailVerificationTokens.set(token, { uid, email, expiresAt });
+    // Store token in Firestore for persistence across server restarts
+    await db.collection("emailVerificationTokens").doc(token).set({
+      uid,
+      email,
+      expiresAt,
+      createdAt: Date.now(),
+    });
 
     // Create verification URL
     const verificationUrl = `${process.env.PUBLIC_APP_URL || "https://usethemove.com"}/verify-email?token=${token}`;
@@ -122,35 +139,71 @@ async function sendEmailVerification(uid, email) {
 
 // Verify email token
 async function verifyEmailToken(token) {
-  const stored = emailVerificationTokens.get(token);
-
-  if (!stored) {
-    return { success: false, message: "Invalid or expired verification token" };
-  }
-
-  if (Date.now() > stored.expiresAt) {
-    emailVerificationTokens.delete(token);
-    return { success: false, message: "Verification token expired" };
-  }
-
+  console.log(`🔍 [verifyEmailToken] Starting verification for token: ${token.substring(0, 10)}...`);
+  
   try {
-    // Mark email as verified in Firebase
-    await admin.auth().updateUser(stored.uid, {
+    // Ensure Firestore is available
+    if (!db) {
+      db = admin.firestore();
+    }
+
+    // Get token from Firestore with timeout
+    const tokenReadPromise = db.collection("emailVerificationTokens").doc(token).get();
+    const tokenReadTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Firestore token read timeout")), 10000)
+    );
+    
+    const tokenDoc = await Promise.race([tokenReadPromise, tokenReadTimeout]);
+
+    if (!tokenDoc.exists) {
+      console.warn(`⚠️ [verifyEmailToken] Token not found in Firestore`);
+      return { success: false, message: "Invalid or expired verification token" };
+    }
+
+    const stored = tokenDoc.data();
+    const now = Date.now();
+
+    if (now > stored.expiresAt) {
+      console.warn(`⚠️ [verifyEmailToken] Token expired. Expires: ${new Date(stored.expiresAt).toISOString()}, Now: ${new Date(now).toISOString()}`);
+      // Delete expired token
+      await db.collection("emailVerificationTokens").doc(token).delete();
+      return { success: false, message: "Verification token expired" };
+    }
+
+    console.log(`✅ [verifyEmailToken] Token valid, verifying user: ${stored.uid}`);
+
+    // Mark email as verified in Firebase with timeout
+    const firebasePromise = admin.auth().updateUser(stored.uid, {
       emailVerified: true,
     });
+    
+    const firebaseTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Firebase update timeout")), 10000)
+    );
+    
+    await Promise.race([firebasePromise, firebaseTimeout]);
+    console.log(`✅ [verifyEmailToken] Firebase auth updated`);
 
-    // Update in Firestore
-    const db = admin.firestore();
-    await db.collection("users").doc(stored.uid).update({
+    // Update in Firestore with timeout
+    const firestorePromise = db.collection("users").doc(stored.uid).update({
       emailVerified: true,
     });
+    
+    const firestoreTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Firestore update timeout")), 10000)
+    );
+    
+    await Promise.race([firestorePromise, firestoreTimeout]);
+    console.log(`✅ [verifyEmailToken] Firestore updated`);
 
-    // Remove token
-    emailVerificationTokens.delete(token);
+    // Remove token from Firestore
+    await db.collection("emailVerificationTokens").doc(token).delete();
+    console.log(`✅ [verifyEmailToken] Token removed from storage`);
 
     return { success: true, message: "Email verified successfully" };
   } catch (error) {
-    console.error("❌ Error verifying email:", error);
+    console.error("❌ [verifyEmailToken] Error:", error);
+    console.error("❌ [verifyEmailToken] Error stack:", error.stack);
     return { success: false, message: "Failed to verify email" };
   }
 }
@@ -158,6 +211,11 @@ async function verifyEmailToken(token) {
 // Send password reset email
 async function sendPasswordResetEmail(email) {
   try {
+    // Ensure Firestore is available
+    if (!db) {
+      db = admin.firestore();
+    }
+
     // Find user by email
     let user;
     try {
@@ -171,8 +229,13 @@ async function sendPasswordResetEmail(email) {
     const token = generateSecureToken();
     const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour
 
-    // Store token
-    passwordResetTokens.set(token, { uid: user.uid, email, expiresAt });
+    // Store token in Firestore for persistence across server restarts
+    await db.collection("passwordResetTokens").doc(token).set({
+      uid: user.uid,
+      email,
+      expiresAt,
+      createdAt: Date.now(),
+    });
 
     // Create reset URL
     const resetUrl = `${process.env.PUBLIC_APP_URL || "https://usethemove.com"}/reset-password?token=${token}`;
@@ -189,36 +252,56 @@ async function sendPasswordResetEmail(email) {
 }
 
 // Verify password reset token
-function verifyPasswordResetToken(token) {
-  const stored = passwordResetTokens.get(token);
+async function verifyPasswordResetToken(token) {
+  try {
+    // Ensure Firestore is available
+    if (!db) {
+      db = admin.firestore();
+    }
 
-  if (!stored) {
+    // Get token from Firestore
+    const tokenDoc = await db.collection("passwordResetTokens").doc(token).get();
+
+    if (!tokenDoc.exists) {
+      return { success: false, message: "Invalid or expired reset token" };
+    }
+
+    const stored = tokenDoc.data();
+    const now = Date.now();
+
+    if (now > stored.expiresAt) {
+      // Delete expired token
+      await db.collection("passwordResetTokens").doc(token).delete();
+      return { success: false, message: "Reset token expired" };
+    }
+
+    return { success: true, uid: stored.uid, email: stored.email };
+  } catch (error) {
+    console.error("❌ Error verifying password reset token:", error);
     return { success: false, message: "Invalid or expired reset token" };
   }
-
-  if (Date.now() > stored.expiresAt) {
-    passwordResetTokens.delete(token);
-    return { success: false, message: "Reset token expired" };
-  }
-
-  return { success: true, uid: stored.uid, email: stored.email };
 }
 
 // Reset password
 async function resetPassword(token, newPassword) {
-  const verification = verifyPasswordResetToken(token);
+  const verification = await verifyPasswordResetToken(token);
   if (!verification.success) {
     return verification;
   }
 
   try {
+    // Ensure Firestore is available
+    if (!db) {
+      db = admin.firestore();
+    }
+
     // Update password in Firebase
     await admin.auth().updateUser(verification.uid, {
       password: newPassword,
     });
 
-    // Remove token
-    passwordResetTokens.delete(token);
+    // Remove token from Firestore
+    await db.collection("passwordResetTokens").doc(token).delete();
 
     return { success: true, message: "Password reset successfully" };
   } catch (error) {
@@ -228,33 +311,69 @@ async function resetPassword(token, newPassword) {
 }
 
 // Clean up expired tokens (run periodically)
-function cleanupExpiredTokens() {
+async function cleanupExpiredTokens() {
   const now = Date.now();
 
-  // Clean phone codes
+  // Clean phone codes (still in memory)
   for (const [phone, data] of phoneVerificationCodes.entries()) {
     if (now > data.expiresAt) {
       phoneVerificationCodes.delete(phone);
     }
   }
 
-  // Clean email tokens
-  for (const [token, data] of emailVerificationTokens.entries()) {
-    if (now > data.expiresAt) {
-      emailVerificationTokens.delete(token);
+  // Clean email verification tokens from Firestore
+  try {
+    if (!db) {
+      db = admin.firestore();
     }
+
+    const emailTokensSnapshot = await db.collection("emailVerificationTokens")
+      .where("expiresAt", "<", now)
+      .limit(100)
+      .get();
+
+    const emailBatch = db.batch();
+    emailTokensSnapshot.forEach((doc) => {
+      emailBatch.delete(doc.ref);
+    });
+    if (!emailTokensSnapshot.empty) {
+      await emailBatch.commit();
+      console.log(`🧹 Cleaned up ${emailTokensSnapshot.size} expired email verification tokens`);
+    }
+  } catch (error) {
+    console.error("❌ Error cleaning up email tokens:", error);
   }
 
-  // Clean password reset tokens
-  for (const [token, data] of passwordResetTokens.entries()) {
-    if (now > data.expiresAt) {
-      passwordResetTokens.delete(token);
+  // Clean password reset tokens from Firestore
+  try {
+    if (!db) {
+      db = admin.firestore();
     }
+
+    const passwordTokensSnapshot = await db.collection("passwordResetTokens")
+      .where("expiresAt", "<", now)
+      .limit(100)
+      .get();
+
+    const passwordBatch = db.batch();
+    passwordTokensSnapshot.forEach((doc) => {
+      passwordBatch.delete(doc.ref);
+    });
+    if (!passwordTokensSnapshot.empty) {
+      await passwordBatch.commit();
+      console.log(`🧹 Cleaned up ${passwordTokensSnapshot.size} expired password reset tokens`);
+    }
+  } catch (error) {
+    console.error("❌ Error cleaning up password reset tokens:", error);
   }
 }
 
 // Run cleanup every hour
-setInterval(cleanupExpiredTokens, 60 * 60 * 1000);
+setInterval(() => {
+  cleanupExpiredTokens().catch(err => {
+    console.error("❌ Error in cleanup job:", err);
+  });
+}, 60 * 60 * 1000);
 
 module.exports = {
   sendPhoneVerificationCode,

@@ -19,7 +19,8 @@ if (useResend) {
   emailClient = sgMail;
 }
 
-const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@usethemove.com";
+// Use verify@ for transactional emails (better deliverability than noreply@)
+const FROM_EMAIL = process.env.FROM_EMAIL || "verify@usethemove.com";
 const FROM_NAME = process.env.FROM_NAME || "TheMove";
 
 // Send email verification

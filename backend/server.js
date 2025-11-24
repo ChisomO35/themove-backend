@@ -16,8 +16,30 @@ if (fs.existsSync(".env")) {
 }
 
 const app = express();
+// CORS configuration - allow both www and non-www versions
+const allowedOrigins = [
+  "https://usethemove.com",
+  "https://www.usethemove.com",
+  process.env.FRONTEND_URL
+].filter(Boolean); // Remove any undefined values
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "https://usethemove.com",
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      // For development, allow localhost
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        callback(null, true);
+      } else {
+        console.warn(`⚠️ CORS blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
   credentials: true
 }));
 app.use(express.static("."));
@@ -1145,19 +1167,97 @@ app.post("/sms", async (req, res) => {
         twiml.message("Try asking about campus events 🙂");
       } else {
         // ✅ Add timeout wrapper for search
-        let reply;
+        console.log(`🔍 [SMS Handler] Starting search for: "${incomingRaw}"`);
+        let reply = null;
+        const searchStartTime = Date.now();
+        let searchTimeoutId = null;
+        
         try {
-          reply = await Promise.race([
-            searchPostersForSMS(incomingRaw, school),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error("Search timeout")), 20000)
-            )
-          ]);
+          const searchPromise = searchPostersForSMS(incomingRaw, school);
+          const timeoutPromise = new Promise((_, reject) => {
+            searchTimeoutId = setTimeout(() => {
+              console.error(`⏱️ [SMS Handler] Search timeout after 20s for: "${incomingRaw}"`);
+              reject(new Error("Search timeout"));
+            }, 20000);
+          });
+          
+          reply = await Promise.race([searchPromise, timeoutPromise]);
+          
+          // Clear timeout if search completed successfully
+          if (searchTimeoutId) {
+            clearTimeout(searchTimeoutId);
+            searchTimeoutId = null;
+          }
+          
+          const searchDuration = Date.now() - searchStartTime;
+          console.log(`✅ [SMS Handler] Search completed in ${searchDuration}ms, reply length: ${reply?.length || 0}`);
+          
+          // Validate reply
+          if (!reply || typeof reply !== 'string') {
+            console.error("❌ [SMS Handler] Invalid reply from search:", reply);
+            reply = "Sorry, I couldn't find any events. Try asking in a different way!";
+          }
         } catch (searchErr) {
-          console.error("❌ Search error:", searchErr.message);
+          // Clear timeout if search errored
+          if (searchTimeoutId) {
+            clearTimeout(searchTimeoutId);
+            searchTimeoutId = null;
+          }
+          
+          const searchDuration = Date.now() - searchStartTime;
+          console.error(`❌ [SMS Handler] Search error after ${searchDuration}ms:`, searchErr.message);
+          console.error("❌ [SMS Handler] Search error stack:", searchErr.stack);
           reply = "Sorry, I'm having trouble searching right now. Please try again in a moment!";
         }
-        twiml.message(reply);
+        
+        // Ensure we always have a reply
+        if (!reply || typeof reply !== 'string') {
+          console.error("❌ [SMS Handler] No reply set, using fallback");
+          reply = "Sorry, something went wrong. Please try again!";
+        }
+        
+        console.log(`📤 [SMS Handler] Sending reply (${reply.length} chars): "${reply.substring(0, 100)}..."`);
+        
+        // Carrier limit is typically 500-800 chars (not 1600!)
+        // Use 600 chars per message to be safe and avoid carrier rejections
+        const MAX_SMS_LENGTH = 600;
+        
+        if (reply.length > MAX_SMS_LENGTH) {
+          console.warn(`⚠️ [SMS Handler] Message too long (${reply.length} chars), splitting into multiple messages`);
+          
+          // Split by double newlines (between results) to keep results intact
+          const resultBlocks = reply.split('\n\n');
+          let currentMessage = '';
+          let messageCount = 0;
+          
+          for (let i = 0; i < resultBlocks.length; i++) {
+            const block = resultBlocks[i];
+            const separator = currentMessage ? '\n\n' : '';
+            const testMessage = currentMessage + separator + block;
+            
+            // If adding this block would exceed limit, send current message first
+            if (testMessage.length > MAX_SMS_LENGTH && currentMessage) {
+              twiml.message(currentMessage);
+              messageCount++;
+              currentMessage = block;
+            } else {
+              currentMessage = testMessage;
+            }
+          }
+          
+          // Send remaining message
+          if (currentMessage) {
+            twiml.message(currentMessage);
+            messageCount++;
+          }
+          
+          console.log(`✅ [SMS Handler] Split into ${messageCount} messages (max ${MAX_SMS_LENGTH} chars each)`);
+        } else {
+          // Single message is fine
+          twiml.message(reply);
+        }
+        
+        console.log(`✅ [SMS Handler] Message(s) added to TwiML. TwiML messages count: ${twiml.toString().match(/<Message>/g)?.length || 0}`);
       }
     }
   } catch (err) {
@@ -1169,9 +1269,39 @@ app.post("/sms", async (req, res) => {
     // ✅ Always send a response, even if there was an error
     if (!responseSent && !res.headersSent) {
       responseSent = true;
-      res.type("text/xml");
-      res.send(twiml.toString());
-      console.log(`✅ SMS response sent to ${req.body.From || "unknown"}`);
+      const twimlString = twiml.toString();
+      console.log(`📤 [SMS Handler] Preparing to send TwiML (${twimlString.length} chars)`);
+      console.log(`📤 [SMS Handler] Full TwiML XML:`, twimlString);
+      
+      // Validate TwiML has a message
+      if (!twimlString.includes('<Message>')) {
+        console.error(`❌ [SMS Handler] TwiML has no <Message> tag! TwiML:`, twimlString);
+        // Create a fallback message
+        const fallbackTwiml = new MessagingResponse();
+        fallbackTwiml.message("Sorry, there was an issue. Please try again!");
+        const fallbackString = fallbackTwiml.toString();
+        res.type("text/xml");
+        res.status(200);
+        res.send(fallbackString);
+        console.log(`⚠️ [SMS Handler] Sent fallback message instead`);
+        return;
+      }
+      
+      try {
+        res.type("text/xml");
+        res.status(200);
+        res.send(twimlString);
+        console.log(`✅ [SMS Handler] Response sent successfully to ${req.body.From || "unknown"}`);
+        console.log(`✅ [SMS Handler] Response status: ${res.statusCode}, headersSent: ${res.headersSent}`);
+      } catch (sendErr) {
+        console.error(`❌ [SMS Handler] Error sending response:`, sendErr);
+        console.error(`❌ [SMS Handler] Error stack:`, sendErr.stack);
+      }
+    } else {
+      console.warn(`⚠️ [SMS Handler] Response already sent or headers sent. responseSent: ${responseSent}, headersSent: ${res.headersSent}`);
+      if (responseSent) {
+        console.warn(`⚠️ [SMS Handler] Response was already marked as sent - this might be a duplicate send attempt`);
+      }
     }
   }
 });
@@ -1268,18 +1398,62 @@ app.post("/auth/send-verification-email", verifyFirebaseToken, async (req, res) 
   }
 });
 
+// Handle CORS preflight for verify-email
+app.options("/auth/verify-email", (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.status(200).end();
+});
+
 app.get("/auth/verify-email", async (req, res) => {
+  console.log(`📧 [Verify Email] Request received from origin: ${req.headers.origin}`);
+  console.log(`📧 [Verify Email] Token: ${req.query.token ? 'present' : 'missing'}`);
+  
+  // Set CORS headers immediately
+  const origin = req.headers.origin;
+  if (origin && (origin.includes('usethemove.com') || origin.includes('localhost'))) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  
   try {
     const { token } = req.query;
     if (!token) {
+      console.error("❌ [Verify Email] No token provided");
       return res.status(400).json({ success: false, message: "Token required" });
     }
 
-    const result = await verifyEmailToken(token);
+    console.log(`🔍 [Verify Email] Verifying token...`);
+    const startTime = Date.now();
+    
+    // Wrap verification in a timeout to ensure we always respond
+    const verificationPromise = verifyEmailToken(token);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Verification timeout after 15 seconds")), 15000)
+    );
+    
+    const result = await Promise.race([verificationPromise, timeoutPromise]);
+    const duration = Date.now() - startTime;
+    console.log(`✅ [Verify Email] Verification completed in ${duration}ms, result:`, result);
+    
     res.json(result);
   } catch (err) {
-    console.error("❌ Error verifying email:", err);
-    res.status(500).json({ success: false, message: "Failed to verify email" });
+    console.error("❌ [Verify Email] Error:", err);
+    console.error("❌ [Verify Email] Error stack:", err.stack);
+    
+    // Ensure response is sent even on timeout
+    if (!res.headersSent) {
+      const errorMessage = err.message && err.message.includes("timeout") 
+        ? "Verification request timed out. Please try again."
+        : "Failed to verify email";
+      res.status(500).json({ success: false, message: errorMessage });
+    }
   }
 });
 
