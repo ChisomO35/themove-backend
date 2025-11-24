@@ -38,22 +38,44 @@ function generateSecureToken() {
 }
 
 // Normalize phone number to E.164 format
+// Handles various formats:
+// - 9195551234 (10 digits) -> +19195551234
+// - 19195551234 (11 digits with country code) -> +19195551234
+// - +1 919 555 1234 (with spaces and +) -> +19195551234
+// - (919) 555-1234 (with formatting) -> +19195551234
 function normalizePhoneToE164(phone) {
   if (!phone) {
     throw new Error("Missing phone number");
   }
 
+  // Remove all non-digit characters (spaces, dashes, parentheses, plus signs, etc.)
   const digits = String(phone).replace(/\D/g, "");
 
+  // Handle 10-digit US phone numbers (most common format users will enter)
   if (digits.length === 10) {
     return `+1${digits}`;
   }
 
+  // Handle 11-digit numbers starting with 1 (country code already included)
   if (digits.length === 11 && digits.startsWith("1")) {
     return `+${digits}`;
   }
 
-  throw new Error("Invalid US phone number");
+  // If we have more than 11 digits, try to extract a valid number
+  if (digits.length > 11 && digits.startsWith("1")) {
+    // Take first 11 digits
+    return `+${digits.substring(0, 11)}`;
+  }
+
+  // If we have more than 10 digits but don't start with 1, take last 10
+  if (digits.length > 10) {
+    const last10 = digits.slice(-10);
+    if (last10.length === 10) {
+      return `+1${last10}`;
+    }
+  }
+
+  throw new Error(`Invalid US phone number format. Expected 10 digits (e.g., 9195551234) or 11 digits starting with 1 (e.g., 19195551234). Got: ${phone} (extracted ${digits.length} digits)`);
 }
 
 // Send SMS verification code via Twilio
