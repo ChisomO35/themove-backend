@@ -368,7 +368,7 @@ app.post("/createUser", verifyFirebaseToken, async (req, res) => {
 
 
 // ✅ Update user with category-aware embeddings
-// ✅ Simplified updateUser to match current fields
+// ✅ Optimized: Only regenerate embeddings when interests change
 app.post("/updateUser", verifyFirebaseToken, ensureUncEmail, async (req, res) => {
   try {
     const { uid, phone, dorm, interests = [], dailyDigestOptIn } = req.body;
@@ -382,22 +382,41 @@ app.post("/updateUser", verifyFirebaseToken, ensureUncEmail, async (req, res) =>
     const email = req.user.email || "";
     const verifiedStatus = req.user.email_verified || false;
 
-    // ✅ Get existing user data to preserve school
+    // ✅ Get existing user data to preserve school and check if interests changed
     const existingUser = await db.collection("users").doc(finalUid).get();
     const existingData = existingUser.exists ? existingUser.data() : {};
     const userSchool = existingData.school || "UNC-Chapel Hill";
+    
+    // Normalize interests arrays for comparison (sort and compare)
+    const existingInterests = (existingData.interests || []).sort().join(",");
+    const newInterests = [...interests].sort().join(",");
+    const interestsChanged = existingInterests !== newInterests;
+    
+    console.log(`🔍 [UpdateUser] Interests changed: ${interestsChanged}`);
+    console.log(`🔍 [UpdateUser] Existing: [${existingInterests}]`);
+    console.log(`🔍 [UpdateUser] New: [${newInterests}]`);
 
-    // ✅ Enhanced user embedding - more descriptive and searchable
-    const interestsList = (interests || []).join(", ");
-    const userText = `
-      I'm a ${userSchool} student. My interests: ${interestsList}.
-      I want to find campus events about: ${interestsList}.
-      I'm interested in activities related to: ${interestsList}.
-      Looking for opportunities in: ${interestsList}.
-      ${dorm ? `I live in ${dorm} dormitory.` : ""}
-      I search for events matching these topics: ${interestsList}.
-    `.replace(/\s+/g, " ").trim();
-    const embedding = await createEmbedding(userText);
+    let embedding = existingData.embedding; // Keep existing embedding by default
+    let embeddingUpdated = false;
+
+    // ✅ Only regenerate embedding if interests changed (not for phone/dorm/dailyDigestOptIn)
+    if (interestsChanged) {
+      console.log(`🧩 [UpdateUser] Regenerating embedding for ${email} due to interests change`);
+      const interestsList = (interests || []).join(", ");
+      const userText = `
+        I'm a ${userSchool} student. My interests: ${interestsList}.
+        I want to find campus events about: ${interestsList}.
+        I'm interested in activities related to: ${interestsList}.
+        Looking for opportunities in: ${interestsList}.
+        ${dorm ? `I live in ${dorm} dormitory.` : ""}
+        I search for events matching these topics: ${interestsList}.
+      `.replace(/\s+/g, " ").trim();
+      embedding = await createEmbedding(userText);
+      embeddingUpdated = true;
+      console.log(`✅ [UpdateUser] New embedding generated`);
+    } else {
+      console.log(`⏭️ [UpdateUser] Skipping embedding generation - interests unchanged`);
+    }
 
     const userData = {
       uid: finalUid,
@@ -405,31 +424,55 @@ app.post("/updateUser", verifyFirebaseToken, ensureUncEmail, async (req, res) =>
       phone,
       dorm,
       interests,
-      embedding: embedding, // ✅ Store embedding in Firestore
-      embedding_model: "text-embedding-3-small",
-      embedding_version: "v1",
       emailVerified: verifiedStatus,
       dailyDigestOptIn: !!dailyDigestOptIn,
       updated_at: new Date().toISOString()
     };
 
+    // Only include embedding fields if it was regenerated
+    if (embeddingUpdated) {
+      userData.embedding = embedding;
+      userData.embedding_model = "text-embedding-3-small";
+      userData.embedding_version = "v1";
+    }
+
     await db.collection("users").doc(finalUid).set(userData, { merge: true });
 
-    await index.upsert([
-      {
-        id: finalUid,
-        values: embedding,
-        metadata: {
-          type: "user",
-          email,
-          phone,
-          dorm,
-          interests: (interests || []).join(", ")
+    // Only update Pinecone if embedding changed
+    if (embeddingUpdated) {
+      await index.upsert([
+        {
+          id: finalUid,
+          values: embedding,
+          metadata: {
+            type: "user",
+            email,
+            phone,
+            dorm,
+            interests: (interests || []).join(", ")
+          }
         }
-      }
-    ], { namespace: PINECONE_NAMESPACE });
+      ], { namespace: PINECONE_NAMESPACE });
+      console.log(`✅ [UpdateUser] Pinecone updated with new embedding`);
+    } else {
+      // Still update metadata in Pinecone even if embedding didn't change
+      await index.upsert([
+        {
+          id: finalUid,
+          values: existingData.embedding, // Use existing embedding
+          metadata: {
+            type: "user",
+            email,
+            phone,
+            dorm,
+            interests: (interests || []).join(", ")
+          }
+        }
+      ], { namespace: PINECONE_NAMESPACE });
+      console.log(`✅ [UpdateUser] Pinecone metadata updated (embedding unchanged)`);
+    }
 
-    console.log(`🧩 Updated ${email} — profile saved`);
+    console.log(`🧩 Updated ${email} — profile saved${embeddingUpdated ? ' (embedding regenerated)' : ' (embedding unchanged)'}`);
     res.json({ success: true, message: "Profile updated successfully" });
   } catch (err) {
     console.error("❌ Error updating user:", err);
