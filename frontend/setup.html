@@ -66,11 +66,10 @@
           <!-- Phone Section -->
           <div>
             <label class="block font-medium mb-2">Phone Number (for event updates)</label>
-            <p class="text-sm text-gray-500 mb-2">Include country code (e.g., +1 for US)</p>
             <div class="flex gap-2">
               <input
                 id="phone"
-                placeholder="+1 234 567 8901"
+                placeholder="234 567 8901 or +1 234 567 8901"
                 class="form-input flex-grow"
                 type="tel"
               />
@@ -275,15 +274,9 @@
           return;
         }
         
-        // Check if phone number includes country code
-        const digits = phoneInput.replace(/\D/g, "");
-        if (digits.length < 11) {
-          showToast("Please include country code (e.g., +1 for US). Format: +1XXXXXXXXXX", "warning");
-          return;
-        }
-        
         // Strip all non-digit characters before sending to backend
-        const phone = digits;
+        // Backend will normalize 10-digit numbers to include country code
+        const phone = phoneInput.replace(/\D/g, "");
 
         try {
           const idToken = await currentUser.getIdToken(true);
