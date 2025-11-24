@@ -39,30 +39,52 @@ function generateSecureToken() {
 
 // Normalize phone number to E.164 format
 function normalizePhoneToE164(phoneNumber) {
-  // Remove all non-digit characters except +
-  let cleaned = phoneNumber.replace(/[^\d+]/g, "");
+  if (!phoneNumber || typeof phoneNumber !== 'string') {
+    throw new Error('Phone number must be a non-empty string');
+  }
+  
+  // Remove all whitespace and non-digit characters except +
+  let cleaned = phoneNumber.trim().replace(/[\s\-\(\)\.]/g, "");
   
   // Remove leading + if present
   if (cleaned.startsWith("+")) {
     cleaned = cleaned.substring(1);
   }
   
-  // If it starts with 1 and has 11 digits, add +
-  if (cleaned.startsWith("1") && cleaned.length === 11) {
-    return "+" + cleaned;
+  // Extract only digits
+  const digits = cleaned.replace(/\D/g, "");
+  
+  if (!digits || digits.length === 0) {
+    throw new Error('Phone number contains no digits');
   }
-  // If it has 10 digits (US number without country code), add +1
-  else if (cleaned.length === 10) {
-    return "+1" + cleaned;
+  
+  // Handle different input formats
+  let result;
+  if (digits.length === 11 && digits.startsWith("1")) {
+    // Already has country code: 1XXXXXXXXXX -> +1XXXXXXXXXX
+    result = "+" + digits;
+  } else if (digits.length === 10) {
+    // US number without country code: XXXXXXXXXX -> +1XXXXXXXXXX
+    result = "+1" + digits;
+  } else if (digits.length > 11 && digits.startsWith("1")) {
+    // Has country code but extra digits, take first 11: 1XXXXXXXXXX... -> +1XXXXXXXXXX
+    result = "+" + digits.substring(0, 11);
+  } else {
+    // Try to extract 10 digits from the end
+    const last10 = digits.slice(-10);
+    if (last10.length === 10) {
+      result = "+1" + last10;
+    } else {
+      throw new Error(`Invalid phone number format: ${phoneNumber} (extracted digits: ${digits})`);
+    }
   }
-  // If it already has +1, return as is
-  else if (cleaned.startsWith("1") && cleaned.length > 11) {
-    return "+" + cleaned;
+  
+  // Final validation: must be +1 followed by exactly 10 digits
+  if (!/^\+1\d{10}$/.test(result)) {
+    throw new Error(`Failed to normalize to E.164 format: ${phoneNumber} -> ${result}`);
   }
-  // Default: assume it needs +1
-  else {
-    return "+1" + cleaned.replace(/^1/, "");
-  }
+  
+  return result;
 }
 
 // Send SMS verification code via Twilio
