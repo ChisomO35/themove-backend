@@ -134,7 +134,14 @@
               type="submit"
               class="btn btn-primary btn-full btn-lg"
             >
-              Sign Up
+              <span id="signup-button-text">Sign Up</span>
+              <span id="signup-button-spinner" class="hidden">
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Processing...
+              </span>
             </button>
 
             <p class="text-center text-sm text-gray-600 mt-4">
@@ -167,6 +174,8 @@
       }
     </script>
 
+    <!-- ✅ Firebase Config (loads from external file, gitignored) -->
+    <script src="/firebase-config.js"></script>
     <!-- ✅ Firebase Logic -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
@@ -178,8 +187,9 @@
         signOut,
       } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 
-      const firebaseConfig = {
-        apiKey: "AIzaSyDuHcTFbqy9e0nov4eKHNTp89WVcQOrlTQ",
+      // Firebase config loaded from external file (not in git)
+      const firebaseConfig = window.__FIREBASE_CONFIG__ || {
+        apiKey: "",
         authDomain: "themove-c75d3.firebaseapp.com",
         projectId: "themove-c75d3",
         storageBucket: "themove-c75d3.firebasestorage.app",
@@ -195,43 +205,64 @@
         await setPersistence(auth, browserLocalPersistence);
 
         async function handleSignUp() {
-          const name = document.getElementById("name").value.trim();
-          const school = document.getElementById("school").value.trim();
-          let year = document.getElementById("year").value.trim();
-          const otherYear = document.getElementById("other-year").value.trim();
-          const email = document.getElementById("email").value.trim();
-          const password = document.getElementById("password").value.trim();
-          const confirmPassword = document
-            .getElementById("confirm-password")
-            .value.trim();
-
-          if (year === "Other" && otherYear) {
-            year = otherYear;
-          }
-
-          if (
-            !name ||
-            !school ||
-            !year ||
-            !email ||
-            !password ||
-            !confirmPassword
-          ) {
-            showToast("⚠️ Please fill in all required fields.", "warning");
-            return;
-          }
-
-          if (!email.toLowerCase().endsWith("@unc.edu")) {
-            showToast("❌ Email must end with @unc.edu", "error");
-            return;
-          }
-
-          if (password !== confirmPassword) {
-            showToast("❌ Passwords do not match.", "error");
-            return;
-          }
+          const signupButton = document.getElementById("sign-in-button");
+          const buttonText = document.getElementById("signup-button-text");
+          const buttonSpinner = document.getElementById("signup-button-spinner");
+          
+          // Set loading state
+          signupButton.disabled = true;
+          buttonText.classList.add("hidden");
+          buttonSpinner.classList.remove("hidden");
 
           try {
+            const name = document.getElementById("name").value.trim();
+            const school = document.getElementById("school").value.trim();
+            let year = document.getElementById("year").value.trim();
+            const otherYear = document.getElementById("other-year").value.trim();
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value.trim();
+            const confirmPassword = document
+              .getElementById("confirm-password")
+              .value.trim();
+
+            if (year === "Other" && otherYear) {
+              year = otherYear;
+            }
+
+            if (
+              !name ||
+              !school ||
+              !year ||
+              !email ||
+              !password ||
+              !confirmPassword
+            ) {
+              // Reset button state
+              signupButton.disabled = false;
+              buttonText.classList.remove("hidden");
+              buttonSpinner.classList.add("hidden");
+              showToast("⚠️ Please fill in all required fields.", "warning");
+              return;
+            }
+
+            if (!email.toLowerCase().endsWith("@unc.edu")) {
+              // Reset button state
+              signupButton.disabled = false;
+              buttonText.classList.remove("hidden");
+              buttonSpinner.classList.add("hidden");
+              showToast("❌ Email must end with @unc.edu", "error");
+              return;
+            }
+
+            if (password !== confirmPassword) {
+              // Reset button state
+              signupButton.disabled = false;
+              buttonText.classList.remove("hidden");
+              buttonSpinner.classList.add("hidden");
+              showToast("❌ Passwords do not match.", "error");
+              return;
+            }
+
             const userCred = await createUserWithEmailAndPassword(
               auth,
               email,
@@ -282,8 +313,13 @@
 
             await signOut(auth);
             setTimeout(() => (window.location.href = "/login"), 3000);
+            // Keep button disabled since we're redirecting
           } catch (err) {
             console.error("❌ Signup error:", err);
+            // Reset button state on error
+            signupButton.disabled = false;
+            buttonText.classList.remove("hidden");
+            buttonSpinner.classList.add("hidden");
             showToast("Error: " + err.message, "error");
           }
         }
