@@ -70,6 +70,7 @@ async function sendVerificationEmail(email, verificationUrl) {
       text, // Plain text version
       headers: {
         'X-Entity-Ref-ID': `verify-${Date.now()}`, // Unique tracking
+        'List-Unsubscribe': `<mailto:${process.env.REPLY_TO_EMAIL || FROM_EMAIL}?subject=unsubscribe>`, // Help with spam filters
       },
     });
 
@@ -103,6 +104,10 @@ async function sendVerificationEmail(email, verificationUrl) {
 // Send password reset email
 async function sendPasswordResetEmail(email, resetUrl) {
   const subject = "Reset your TheMove password";
+  
+  // Plain text version (better for spam filters)
+  const text = `We received a request to reset your password. Click the link below to create a new password:\n\n${resetUrl}\n\nThis link will expire in 1 hour.\n\nIf you didn't request a password reset, you can safely ignore this email.\n\nTheMove - Find any event on campus in one text`;
+  
   const html = `
     <!DOCTYPE html>
     <html>
@@ -133,12 +138,18 @@ async function sendPasswordResetEmail(email, resetUrl) {
   `;
 
   if (useResend) {
-    // Resend
+    // Resend - with better deliverability settings
     const { data, error } = await emailClient.emails.send({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: email,
+      reply_to: process.env.REPLY_TO_EMAIL || FROM_EMAIL, // Add reply-to
       subject,
       html,
+      text, // Plain text version
+      headers: {
+        'X-Entity-Ref-ID': `reset-${Date.now()}`, // Unique tracking
+        'List-Unsubscribe': `<mailto:${process.env.REPLY_TO_EMAIL || FROM_EMAIL}?subject=unsubscribe>`, // Help with spam filters
+      },
     });
 
     if (error) {
@@ -148,12 +159,19 @@ async function sendPasswordResetEmail(email, resetUrl) {
 
     return { success: true, messageId: data?.id };
   } else {
-    // SendGrid
+    // SendGrid - with better deliverability settings
     const msg = {
       to: email,
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      replyTo: process.env.REPLY_TO_EMAIL || FROM_EMAIL,
       subject,
       html,
+      text, // Plain text version
+      mailSettings: {
+        sandboxMode: {
+          enable: false, // Make sure sandbox mode is off
+        },
+      },
     };
 
     await emailClient.send(msg);
