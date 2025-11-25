@@ -152,12 +152,25 @@ async function sendEmailVerification(uid, email) {
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
     // Store token in Firestore for persistence across server restarts
+    console.log(`📝 [sendEmailVerification] Storing token for UID: ${uid}, Email: ${email}`);
+    console.log(`📝 [sendEmailVerification] Token (first 20 chars): ${token.substring(0, 20)}...`);
+    console.log(`📝 [sendEmailVerification] Token length: ${token.length}`);
+    console.log(`📝 [sendEmailVerification] Token expires at: ${new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()}`);
+    
     await db.collection("emailVerificationTokens").doc(token).set({
       uid,
       email,
-      expiresAt,
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
       createdAt: Date.now(),
     });
+    
+    // Verify it was stored
+    const verifyDoc = await db.collection("emailVerificationTokens").doc(token).get();
+    if (verifyDoc.exists) {
+      console.log(`✅ [sendEmailVerification] Token successfully stored in Firestore`);
+    } else {
+      console.error(`❌ [sendEmailVerification] Token was NOT stored in Firestore!`);
+    }
 
     // Create verification URL
     const verificationUrl = `${process.env.PUBLIC_APP_URL || "https://usethemove.com"}/verify-email?token=${token}`;
@@ -175,7 +188,7 @@ async function sendEmailVerification(uid, email) {
 
 // Verify email token
 async function verifyEmailToken(token) {
-  console.log(`🔍 [verifyEmailToken] Starting verification for token: ${token.substring(0, 10)}...`);
+  console.log(`🔍 [verifyEmailToken] Starting verification for token: ${token ? token.substring(0, 10) + '...' : 'MISSING'}`);
   
   try {
     // Ensure Firestore is available
@@ -183,27 +196,78 @@ async function verifyEmailToken(token) {
       db = admin.firestore();
     }
 
+    if (!token) {
+      console.warn(`⚠️ [verifyEmailToken] No token provided`);
+      return { success: false, message: "Token required" };
+    }
+
+    // Normalize token (trim whitespace, handle URL encoding)
+    const normalizedToken = token.trim();
+    console.log(`🔍 [verifyEmailToken] Normalized token length: ${normalizedToken.length}`);
+    console.log(`🔍 [verifyEmailToken] Token characters: ${normalizedToken.split('').map(c => c.charCodeAt(0)).join(',')}`);
+    
     // Get token from Firestore with timeout
-    const tokenReadPromise = db.collection("emailVerificationTokens").doc(token).get();
+    console.log(`🔍 [verifyEmailToken] Attempting to read token from Firestore...`);
+    const tokenReadPromise = db.collection("emailVerificationTokens").doc(normalizedToken).get();
     const tokenReadTimeout = new Promise((_, reject) => 
       setTimeout(() => reject(new Error("Firestore token read timeout")), 10000)
     );
     
     const tokenDoc = await Promise.race([tokenReadPromise, tokenReadTimeout]);
+    console.log(`🔍 [verifyEmailToken] Token document exists: ${tokenDoc.exists}`);
 
     if (!tokenDoc.exists) {
       console.warn(`⚠️ [verifyEmailToken] Token not found in Firestore`);
-      return { success: false, message: "Invalid or expired verification token" };
+      console.warn(`⚠️ [verifyEmailToken] Token (first 20 chars): ${token.substring(0, 20)}...`);
+      console.warn(`⚠️ [verifyEmailToken] Full token length: ${token.length}`);
+      
+      // Log all existing tokens for debugging (remove in production)
+      try {
+        const allTokens = await db.collection("emailVerificationTokens")
+          .limit(10)
+          .get();
+        console.log(`🔍 [verifyEmailToken] Found ${allTokens.size} tokens in Firestore`);
+        allTokens.forEach(doc => {
+          const data = doc.data();
+          console.log(`🔍 [verifyEmailToken] Existing token: ${doc.id.substring(0, 20)}... (UID: ${data.uid}, Email: ${data.email})`);
+        });
+      } catch (debugError) {
+        console.error("❌ [verifyEmailToken] Error checking existing tokens:", debugError);
+      }
+      
+      // Token not found - could be:
+      // 1. Already used and deleted
+      // 2. Expired and cleaned up
+      // 3. Never created (unlikely)
+      // 4. Wrong token format
+      return { success: false, message: "Invalid or expired verification token. Please request a new verification email." };
     }
 
     const stored = tokenDoc.data();
     const now = Date.now();
 
+    console.log(`🔍 [verifyEmailToken] Token found for UID: ${stored.uid}, Email: ${stored.email}`);
+    console.log(`🔍 [verifyEmailToken] Token expires: ${new Date(stored.expiresAt).toISOString()}, Now: ${new Date(now).toISOString()}`);
+
     if (now > stored.expiresAt) {
       console.warn(`⚠️ [verifyEmailToken] Token expired. Expires: ${new Date(stored.expiresAt).toISOString()}, Now: ${new Date(now).toISOString()}`);
       // Delete expired token
       await db.collection("emailVerificationTokens").doc(token).delete();
-      return { success: false, message: "Verification token expired" };
+      return { success: false, message: "Verification token expired. Please request a new verification email." };
+    }
+
+    // Check if email is already verified before proceeding
+    try {
+      const user = await admin.auth().getUser(stored.uid);
+      if (user.emailVerified) {
+        console.log(`✅ [verifyEmailToken] Email already verified for ${stored.email}`);
+        // Delete token since it's already been used
+        await db.collection("emailVerificationTokens").doc(token).delete();
+        return { success: true, message: "Email already verified" };
+      }
+    } catch (userCheckError) {
+      console.warn(`⚠️ [verifyEmailToken] Could not check user status:`, userCheckError.message);
+      // Continue with verification attempt
     }
 
     console.log(`✅ [verifyEmailToken] Token valid, verifying user: ${stored.uid}`);
@@ -240,7 +304,13 @@ async function verifyEmailToken(token) {
   } catch (error) {
     console.error("❌ [verifyEmailToken] Error:", error);
     console.error("❌ [verifyEmailToken] Error stack:", error.stack);
-    return { success: false, message: "Failed to verify email" };
+    
+    // More specific error messages
+    if (error.message && error.message.includes("timeout")) {
+      return { success: false, message: "Verification request timed out. Please try again." };
+    }
+    
+    return { success: false, message: "Failed to verify email. Please try requesting a new verification email." };
   }
 }
 
