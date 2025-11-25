@@ -1,27 +1,37 @@
 // emailService.js
-// Email service using Resend (recommended) or SendGrid
-// Install: npm install resend
-// Or: npm install @sendgrid/mail
+// Email service using Nodemailer with Office365 SMTP
+// Install: npm install nodemailer
 
-// Option 1: Using Resend (Recommended - better deliverability)
-const useResend = true; // Set to false to use SendGrid
+const nodemailer = require("nodemailer");
 
-let emailClient;
-
-if (useResend) {
-  // Resend setup
-  const { Resend } = require("resend");
-  emailClient = new Resend(process.env.RESEND_API_KEY);
-} else {
-  // SendGrid setup
-  const sgMail = require("@sendgrid/mail");
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-  emailClient = sgMail;
-}
-
-// Use support@ for transactional emails (better deliverability than noreply@)
+// Email configuration
 const FROM_EMAIL = process.env.FROM_EMAIL || "support@usethemove.com";
 const FROM_NAME = process.env.FROM_NAME || "TheMove";
+const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
+
+// Create transporter with Office365 SMTP
+const transporter = nodemailer.createTransport({
+  host: "smtp.office365.com",
+  port: 587,
+  secure: false, // TLS required but secure:false for STARTTLS
+  auth: {
+    user: FROM_EMAIL, // support@usethemove.com
+    pass: EMAIL_PASSWORD, // from GoDaddy/MS365
+  },
+  tls: {
+    ciphers: "SSLv3",
+    rejectUnauthorized: false, // Allow self-signed certificates if needed
+  },
+});
+
+// Verify transporter configuration on startup
+transporter.verify(function (error, success) {
+  if (error) {
+    console.error("❌ Email transporter verification failed:", error);
+  } else {
+    console.log("✅ Email transporter is ready to send emails");
+  }
+});
 
 // Send email verification
 async function sendVerificationEmail(email, verificationUrl) {
@@ -59,45 +69,26 @@ async function sendVerificationEmail(email, verificationUrl) {
     </html>
   `;
 
-  if (useResend) {
-    // Resend - with better deliverability settings
-    const { data, error } = await emailClient.emails.send({
-      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+  try {
+    const mailOptions = {
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
       to: email,
-      reply_to: process.env.REPLY_TO_EMAIL || FROM_EMAIL, // Add reply-to
+      replyTo: process.env.REPLY_TO_EMAIL || FROM_EMAIL,
       subject,
-      html,
       text, // Plain text version
+      html,
       headers: {
         'X-Entity-Ref-ID': `verify-${Date.now()}`, // Unique tracking
         'List-Unsubscribe': `<mailto:${process.env.REPLY_TO_EMAIL || FROM_EMAIL}?subject=unsubscribe>`, // Help with spam filters
       },
-    });
-
-    if (error) {
-      console.error("❌ Resend error:", error);
-      throw error;
-    }
-
-    return { success: true, messageId: data?.id };
-  } else {
-    // SendGrid - with better deliverability settings
-    const msg = {
-      to: email,
-      from: `${FROM_NAME} <${FROM_EMAIL}>`,
-      replyTo: process.env.REPLY_TO_EMAIL || FROM_EMAIL,
-      subject,
-      html,
-      text, // Plain text version
-      mailSettings: {
-        sandboxMode: {
-          enable: false, // Make sure sandbox mode is off
-        },
-      },
     };
 
-    await emailClient.send(msg);
-    return { success: true };
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✅ Verification email sent to ${email}, messageId: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("❌ Error sending verification email:", error);
+    throw error;
   }
 }
 
@@ -137,45 +128,26 @@ async function sendPasswordResetEmail(email, resetUrl) {
     </html>
   `;
 
-  if (useResend) {
-    // Resend - with better deliverability settings
-    const { data, error } = await emailClient.emails.send({
-      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+  try {
+    const mailOptions = {
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
       to: email,
-      reply_to: process.env.REPLY_TO_EMAIL || FROM_EMAIL, // Add reply-to
+      replyTo: process.env.REPLY_TO_EMAIL || FROM_EMAIL,
       subject,
-      html,
       text, // Plain text version
+      html,
       headers: {
         'X-Entity-Ref-ID': `reset-${Date.now()}`, // Unique tracking
         'List-Unsubscribe': `<mailto:${process.env.REPLY_TO_EMAIL || FROM_EMAIL}?subject=unsubscribe>`, // Help with spam filters
       },
-    });
-
-    if (error) {
-      console.error("❌ Resend error:", error);
-      throw error;
-    }
-
-    return { success: true, messageId: data?.id };
-  } else {
-    // SendGrid - with better deliverability settings
-    const msg = {
-      to: email,
-      from: `${FROM_NAME} <${FROM_EMAIL}>`,
-      replyTo: process.env.REPLY_TO_EMAIL || FROM_EMAIL,
-      subject,
-      html,
-      text, // Plain text version
-      mailSettings: {
-        sandboxMode: {
-          enable: false, // Make sure sandbox mode is off
-        },
-      },
     };
 
-    await emailClient.send(msg);
-    return { success: true };
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✅ Password reset email sent to ${email}, messageId: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("❌ Error sending password reset email:", error);
+    throw error;
   }
 }
 
@@ -183,4 +155,3 @@ module.exports = {
   sendVerificationEmail,
   sendPasswordResetEmail,
 };
-
