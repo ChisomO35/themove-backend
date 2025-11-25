@@ -258,7 +258,7 @@
     <!-- JS -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
-      import { getAuth } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+      import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 
       // Firebase config loaded from external file (not in git)
       const firebaseConfig = window.__FIREBASE_CONFIG__ || {
@@ -433,6 +433,97 @@
 
       // Auto-save on phone input change (with debounce)
       document.getElementById("phone").addEventListener("input", debouncedSave);
+
+      // Delete Account functionality
+      function showDeleteModal() {
+        const modal = document.getElementById("delete-modal");
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+        setTimeout(() => {
+          modal.classList.add("show");
+        }, 10);
+      }
+
+      function hideDeleteModal() {
+        const modal = document.getElementById("delete-modal");
+        modal.classList.remove("show");
+        setTimeout(() => {
+          modal.classList.add("hidden");
+          modal.classList.remove("flex");
+        }, 250);
+      }
+
+      window.deleteAccount = function() {
+        showDeleteModal();
+      };
+
+      // Cancel delete button
+      document.getElementById("cancel-delete").addEventListener("click", () => {
+        hideDeleteModal();
+      });
+
+      // Confirm delete button
+      document.getElementById("confirm-delete").addEventListener("click", async () => {
+        const confirmButton = document.getElementById("confirm-delete");
+        const originalText = confirmButton.textContent;
+        confirmButton.disabled = true;
+        confirmButton.textContent = "Deleting...";
+        confirmButton.classList.add("opacity-50", "cursor-not-allowed");
+
+        try {
+          const user = auth.currentUser;
+          if (!user) {
+            showToast("Session expired. Please log in again.", "error");
+            hideDeleteModal();
+            setTimeout(() => (window.location.href = "/login"), 2000);
+            return;
+          }
+
+          const idToken = await user.getIdToken(true);
+
+          const res = await fetch("https://themove-backend-production.up.railway.app/deleteAccount", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`,
+            },
+          });
+
+          const data = await res.json();
+          
+          if (data.success) {
+            showToast("✅ Account deleted successfully", "success");
+            hideDeleteModal();
+            
+            // Clear local storage and sign out
+            localStorage.clear();
+            await signOut(auth);
+            
+            // Redirect to home page
+            setTimeout(() => {
+              window.location.href = "/";
+            }, 1500);
+          } else {
+            showToast(data.message || "Failed to delete account. Please try again.", "error");
+            confirmButton.disabled = false;
+            confirmButton.textContent = originalText;
+            confirmButton.classList.remove("opacity-50", "cursor-not-allowed");
+          }
+        } catch (err) {
+          console.error("Error deleting account:", err);
+          showToast("Error deleting account. Please try again.", "error");
+          confirmButton.disabled = false;
+          confirmButton.textContent = originalText;
+          confirmButton.classList.remove("opacity-50", "cursor-not-allowed");
+        }
+      });
+
+      // Close modal when clicking outside
+      document.getElementById("delete-modal").addEventListener("click", (e) => {
+        if (e.target.id === "delete-modal") {
+          hideDeleteModal();
+        }
+      });
 
       window.onload = loadProfile;
     </script>
