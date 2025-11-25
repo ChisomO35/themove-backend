@@ -143,6 +143,8 @@
       }
     </script>
 
+    <!-- ✅ Firebase Config (loads from external file, gitignored) -->
+    <script src="/firebase-config.js"></script>
     <!-- ✅ Firebase Logic -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
@@ -153,8 +155,9 @@
         browserLocalPersistence,
       } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 
-      const firebaseConfig = {
-        apiKey: "AIzaSyDuHcTFbqy9e0nov4eKHNTp89WVcQOrlTQ",
+      // Firebase config loaded from external file (not in git)
+      const firebaseConfig = window.__FIREBASE_CONFIG__ || {
+        apiKey: "",
         authDomain: "themove-c75d3.firebaseapp.com",
         projectId: "themove-c75d3",
         storageBucket: "themove-c75d3.firebasestorage.app",

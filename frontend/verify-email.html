@@ -79,13 +79,6 @@
       const urlParams = new URLSearchParams(window.location.search);
       const token = urlParams.get("token");
 
-      if (!token) {
-        document.getElementById("loading-state").classList.add("hidden");
-        document.getElementById("error-state").classList.remove("hidden");
-        document.getElementById("error-message").textContent = "No verification token provided.";
-        return;
-      }
-
       // Verify email with timeout
       async function verifyEmail() {
         console.log(`🔍 [Frontend] Starting email verification for token: ${token.substring(0, 10)}...`);
@@ -150,7 +143,14 @@
         }
       }
 
-      verifyEmail();
+      // Only call verifyEmail if we have a token, otherwise show error immediately
+      if (!token) {
+        document.getElementById("loading-state").classList.add("hidden");
+        document.getElementById("error-state").classList.remove("hidden");
+        document.getElementById("error-message").textContent = "No verification token provided.";
+      } else {
+        verifyEmail();
+      }
     </script>
   </body>
 </html>

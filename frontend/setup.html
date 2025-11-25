@@ -183,10 +183,18 @@
           </div>
 
           <button
+            id="save-profile-button"
             onclick="handleSubmit()"
             class="btn btn-primary btn-full btn-lg mt-8"
           >
-            Save Profile
+            <span id="save-button-text">Save Profile</span>
+            <span id="save-button-spinner" class="hidden">
+              <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Processing...
+            </span>
           </button>
           </div>
         </div>
@@ -357,17 +365,26 @@
       });
 
       window.handleSubmit = async function () {
-        // Get phone number and add +1 prefix if user only entered 10 digits
-        const phoneInput = document.getElementById("phone").value.trim();
-        const digits = phoneInput.replace(/\D/g, "");
-        const phone = digits.length === 10 ? "+1" + digits : phoneInput.replace(/\D/g, "");
-        const dorm = document.getElementById("dorm").value.trim();
-        const selectedTags = Array.from(document.querySelectorAll(".tag.bg-primary")).map(
-          (t) => t.textContent
-        );
-        const payload = { uid: currentUser.uid, phone, dorm, interests: selectedTags };
+        const saveButton = document.getElementById("save-profile-button");
+        const buttonText = document.getElementById("save-button-text");
+        const buttonSpinner = document.getElementById("save-button-spinner");
+        
+        // Set loading state
+        saveButton.disabled = true;
+        buttonText.classList.add("hidden");
+        buttonSpinner.classList.remove("hidden");
 
         try {
+          // Get phone number and add +1 prefix if user only entered 10 digits
+          const phoneInput = document.getElementById("phone").value.trim();
+          const digits = phoneInput.replace(/\D/g, "");
+          const phone = digits.length === 10 ? "+1" + digits : phoneInput.replace(/\D/g, "");
+          const dorm = document.getElementById("dorm").value.trim();
+          const selectedTags = Array.from(document.querySelectorAll(".tag.bg-primary")).map(
+            (t) => t.textContent
+          );
+          const payload = { uid: currentUser.uid, phone, dorm, interests: selectedTags };
+
           const idToken = await currentUser.getIdToken(true);
           const res = await fetch("https://themove-backend-production.up.railway.app/updateUser", {
             method: "POST",
@@ -380,10 +397,21 @@
           const data = await res.json();
           if (data.success) {
             showToast("✅ Profile saved successfully!", "success");
+            // Keep button disabled since we're redirecting
             setTimeout(() => (window.location.href = "/profile"), 2000);
-          } else showToast(data.message, "warning");
+          } else {
+            // Reset button state on error
+            saveButton.disabled = false;
+            buttonText.classList.remove("hidden");
+            buttonSpinner.classList.add("hidden");
+            showToast(data.message, "warning");
+          }
         } catch (err) {
           console.error(err);
+          // Reset button state on error
+          saveButton.disabled = false;
+          buttonText.classList.remove("hidden");
+          buttonSpinner.classList.add("hidden");
           showToast("Error updating profile.", "error");
         }
       };

@@ -25,6 +25,3 @@ uploads/
 
 # Firebase service account (specific)
 firebase-service-account.json
-
-# Firebase config - now committed (web API keys are public, domain-restricted)
-# firebase-config.js is now public and safe to commit

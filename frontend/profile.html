@@ -95,13 +95,16 @@
           <!-- Phone -->
           <div>
             <label class="block font-medium mb-2">Phone Number</label>
-            <p class="text-sm text-gray-500 mb-2">Include country code (e.g., +1 for US)</p>
-            <input
-              id="phone"
-              placeholder="+1 234 567 8901"
-              class="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-primary outline-none"
-              readonly
-            />
+            <div class="flex items-center flex-grow border border-gray-300 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary">
+              <span class="px-3 py-2 bg-gray-50 text-gray-700 border-r border-gray-300">+1</span>
+              <input
+                id="phone"
+                placeholder="234 567 8901"
+                class="border-0 flex-grow focus:ring-0 outline-none px-4 py-2"
+                type="tel"
+                maxlength="14"
+              />
+            </div>
           </div>
 
           <!-- Dorm -->
@@ -183,16 +186,15 @@
             </div>
           </div>
 
+          <!-- Save Status Indicator -->
+          <div id="save-status" class="pt-4 border-t border-gray-200 hidden">
+            <p class="text-sm text-gray-500 text-center">
+              <span id="save-status-text">Saving...</span>
+            </p>
+          </div>
+
           <!-- Buttons -->
           <div class="space-y-3 pt-8 border-t border-gray-200">
-            <button
-              onclick="saveProfile()
-"
-              class="bg-primary text-white w-full py-2.5 rounded-xl font-medium hover:bg-indigo-700 transition shadow-md hover:shadow-lg"
-            >
-              Save Changes
-            </button>
-
             <button
               onclick="localStorage.clear(); window.location.href='/login';"
               class="bg-gray-100 text-gray-700 w-full py-2.5 rounded-xl font-medium hover:bg-gray-200 transition"
@@ -217,9 +219,6 @@
       <div class="container">
         <p class="text-muted">© 2025 TheMove • Made with 🩵 at UNC</p>
       </div>
-    </footer>
-      © 2025 TheMove • Made with 🩵 at UNC
-    </footer>
 
     <!-- Toast -->
     <div
@@ -325,44 +324,60 @@
         }
       }
 
-      // Toggle disclosure visibility
-      document.addEventListener("change", (e) => {
-        if (e.target.id === "digestToggle") {
-          document
-            .getElementById("digestDescription")
-            .classList.toggle("hidden", !e.target.checked);
-        }
-      });
+      // Auto-save functionality with debouncing
+      let saveTimeout = null;
+      let isSaving = false;
 
-      document.addEventListener("click", (e) => {
-        if (e.target.classList.contains("tag")) {
-          e.target.classList.toggle("selected");
+      function showSaveStatus(message, type = "info") {
+        const statusEl = document.getElementById("save-status");
+        const statusText = document.getElementById("save-status-text");
+        statusEl.classList.remove("hidden");
+        statusText.textContent = message;
+        
+        const colors = {
+          saving: "text-blue-500",
+          success: "text-green-500",
+          error: "text-red-500"
+        };
+        statusText.className = `text-sm ${colors[type] || colors.saving}`;
+        
+        if (type === "success") {
+          setTimeout(() => {
+            statusEl.classList.add("hidden");
+          }, 2000);
         }
-      });
+      }
 
       async function saveProfile() {
+        if (isSaving) return; // Prevent concurrent saves
+        
         const uid = localStorage.getItem("uid");
-        if (!uid) return showToast("Please log in first.", "warning");
+        if (!uid) return;
 
-        // Strip all non-digit characters before sending to backend
-        const phone = document.getElementById("phone").value.replace(/\D/g, "").trim();
+        // Get phone number and add +1 prefix if user only entered 10 digits
+        const phoneInput = document.getElementById("phone").value.trim();
+        const digits = phoneInput.replace(/\D/g, "");
+        const phone = digits.length === 10 ? "+1" + digits : phoneInput.replace(/\D/g, "");
         const dorm = document.getElementById("dorm").value.trim();
         const interests = Array.from(document.querySelectorAll(".tag.selected")).map(
           (t) => t.textContent
         );
-
         const dailyDigestOptIn = document.getElementById("digestToggle").checked;
+
+        isSaving = true;
+        showSaveStatus("Saving...", "saving");
 
         try {
           const user = auth.currentUser;
           if (!user) {
-            showToast("Session expired. Please log in again.", "warning");
-            return (window.location.href = "/login");
+            showSaveStatus("Session expired. Please log in again.", "error");
+            setTimeout(() => (window.location.href = "/login"), 2000);
+            return;
           }
 
           const idToken = await user.getIdToken(true);
 
-          const res = await fetch("https://themove-backend-production-up.railway.app/updateUser", {
+          const res = await fetch("https://themove-backend-production.up.railway.app/updateUser", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -372,15 +387,54 @@
           });
 
           const data = await res.json();
-          if (data.success) showToast("✅ Profile updated!", "success");
-          else showToast(data.message || "⚠️ Error saving profile.", "warning");
-        } catch {
-          showToast("❌ Error updating profile.", "error");
+          if (data.success) {
+            showSaveStatus("✓ Saved", "success");
+          } else {
+            showSaveStatus("Error saving. Please try again.", "error");
+          }
+        } catch (err) {
+          console.error("Error saving profile:", err);
+          showSaveStatus("Error saving. Please try again.", "error");
+        } finally {
+          isSaving = false;
         }
       }
 
+      // Debounced save function
+      function debouncedSave() {
+        if (saveTimeout) {
+          clearTimeout(saveTimeout);
+        }
+        saveTimeout = setTimeout(() => {
+          saveProfile();
+        }, 500); // Wait 500ms after user stops making changes
+      }
+
+      // Auto-save on dorm change
+      document.getElementById("dorm").addEventListener("change", debouncedSave);
+
+      // Auto-save on daily digest toggle
+      document.addEventListener("change", (e) => {
+        if (e.target.id === "digestToggle") {
+          document
+            .getElementById("digestDescription")
+            .classList.toggle("hidden", !e.target.checked);
+          debouncedSave();
+        }
+      });
+
+      // Auto-save on interest tag click
+      document.addEventListener("click", (e) => {
+        if (e.target.classList.contains("tag")) {
+          e.target.classList.toggle("selected");
+          debouncedSave();
+        }
+      });
+
+      // Auto-save on phone input change (with debounce)
+      document.getElementById("phone").addEventListener("input", debouncedSave);
+
       window.onload = loadProfile;
-      window.saveProfile = saveProfile;
     </script>
   </body> 
 </html>
