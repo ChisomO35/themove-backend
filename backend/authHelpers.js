@@ -204,103 +204,121 @@ async function verifyEmailToken(token) {
     // Normalize token (trim whitespace, handle URL encoding)
     const normalizedToken = token.trim();
     console.log(`🔍 [verifyEmailToken] Normalized token length: ${normalizedToken.length}`);
-    console.log(`🔍 [verifyEmailToken] Token characters: ${normalizedToken.split('').map(c => c.charCodeAt(0)).join(',')}`);
+    console.log(`🔍 [verifyEmailToken] Full token: ${normalizedToken}`);
+    console.log(`🔍 [verifyEmailToken] Token format check - is hex: ${/^[0-9a-f]+$/i.test(normalizedToken)}`);
     
     // Get token from Firestore with timeout
-    console.log(`🔍 [verifyEmailToken] Attempting to read token from Firestore...`);
-    const tokenReadPromise = db.collection("emailVerificationTokens").doc(normalizedToken).get();
-    const tokenReadTimeout = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Firestore token read timeout")), 10000)
-    );
+    console.log(`🔍 [verifyEmailToken] Attempting to read token from Firestore collection: emailVerificationTokens`);
+    console.log(`🔍 [verifyEmailToken] Document ID will be: ${normalizedToken}`);
     
-    const tokenDoc = await Promise.race([tokenReadPromise, tokenReadTimeout]);
-    console.log(`🔍 [verifyEmailToken] Token document exists: ${tokenDoc.exists}`);
-
-    if (!tokenDoc.exists) {
-      console.warn(`⚠️ [verifyEmailToken] Token not found in Firestore`);
-      console.warn(`⚠️ [verifyEmailToken] Token (first 20 chars): ${token.substring(0, 20)}...`);
-      console.warn(`⚠️ [verifyEmailToken] Full token length: ${token.length}`);
-      
-      // Log all existing tokens for debugging (remove in production)
-      try {
-        const allTokens = await db.collection("emailVerificationTokens")
-          .limit(10)
-          .get();
-        console.log(`🔍 [verifyEmailToken] Found ${allTokens.size} tokens in Firestore`);
-        allTokens.forEach(doc => {
-          const data = doc.data();
-          console.log(`🔍 [verifyEmailToken] Existing token: ${doc.id.substring(0, 20)}... (UID: ${data.uid}, Email: ${data.email})`);
-        });
-      } catch (debugError) {
-        console.error("❌ [verifyEmailToken] Error checking existing tokens:", debugError);
-      }
-      
-      // Token not found - could be:
-      // 1. Already used and deleted
-      // 2. Expired and cleaned up
-      // 3. Never created (unlikely)
-      // 4. Wrong token format
-      return { success: false, message: "Invalid or expired verification token. Please request a new verification email." };
-    }
-
-    const stored = tokenDoc.data();
-    const now = Date.now();
-
-    console.log(`🔍 [verifyEmailToken] Token found for UID: ${stored.uid}, Email: ${stored.email}`);
-    console.log(`🔍 [verifyEmailToken] Token expires: ${new Date(stored.expiresAt).toISOString()}, Now: ${new Date(now).toISOString()}`);
-
-    if (now > stored.expiresAt) {
-      console.warn(`⚠️ [verifyEmailToken] Token expired. Expires: ${new Date(stored.expiresAt).toISOString()}, Now: ${new Date(now).toISOString()}`);
-      // Delete expired token
-      await db.collection("emailVerificationTokens").doc(token).delete();
-      return { success: false, message: "Verification token expired. Please request a new verification email." };
-    }
-
-    // Check if email is already verified before proceeding
     try {
-      const user = await admin.auth().getUser(stored.uid);
-      if (user.emailVerified) {
-        console.log(`✅ [verifyEmailToken] Email already verified for ${stored.email}`);
-        // Delete token since it's already been used
-        await db.collection("emailVerificationTokens").doc(token).delete();
-        return { success: true, message: "Email already verified" };
+      const tokenReadPromise = db.collection("emailVerificationTokens").doc(normalizedToken).get();
+      const tokenReadTimeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Firestore token read timeout")), 10000)
+      );
+      
+      const tokenDoc = await Promise.race([tokenReadPromise, tokenReadTimeout]);
+      console.log(`🔍 [verifyEmailToken] Token document exists: ${tokenDoc.exists}`);
+      
+      if (!tokenDoc.exists) {
+        // Try to list all tokens to see what's actually in the collection
+        console.log(`🔍 [verifyEmailToken] Token not found, listing all tokens in collection...`);
+        const allTokensSnapshot = await db.collection("emailVerificationTokens").limit(50).get();
+        console.log(`🔍 [verifyEmailToken] Total tokens in collection: ${allTokensSnapshot.size}`);
+        
+        allTokensSnapshot.forEach((doc) => {
+          const data = doc.data();
+          console.log(`🔍 [verifyEmailToken] Found token doc ID: ${doc.id.substring(0, 20)}... (length: ${doc.id.length})`);
+          console.log(`🔍 [verifyEmailToken]   - UID: ${data.uid}`);
+          console.log(`🔍 [verifyEmailToken]   - Email: ${data.email}`);
+          console.log(`🔍 [verifyEmailToken]   - Created: ${new Date(data.createdAt).toISOString()}`);
+          console.log(`🔍 [verifyEmailToken]   - Expires: ${new Date(data.expiresAt).toISOString()}`);
+          
+          // Check if this token matches (case-insensitive)
+          if (doc.id.toLowerCase() === normalizedToken.toLowerCase()) {
+            console.log(`⚠️ [verifyEmailToken] FOUND MATCHING TOKEN BUT CASE MISMATCH!`);
+            console.log(`⚠️ [verifyEmailToken] Looking for: ${normalizedToken}`);
+            console.log(`⚠️ [verifyEmailToken] Found: ${doc.id}`);
+          }
+        });
       }
-    } catch (userCheckError) {
-      console.warn(`⚠️ [verifyEmailToken] Could not check user status:`, userCheckError.message);
-      // Continue with verification attempt
+      
+      if (!tokenDoc.exists) {
+        console.warn(`⚠️ [verifyEmailToken] Token not found in Firestore`);
+        console.warn(`⚠️ [verifyEmailToken] Token (first 20 chars): ${normalizedToken.substring(0, 20)}...`);
+        console.warn(`⚠️ [verifyEmailToken] Full token length: ${normalizedToken.length}`);
+        
+        // Token not found - could be:
+        // 1. Already used and deleted
+        // 2. Expired and cleaned up
+        // 3. Never created (unlikely)
+        // 4. Wrong token format
+        return { success: false, message: "Invalid or expired verification token. Please request a new verification email." };
+      }
+      
+      const stored = tokenDoc.data();
+      const now = Date.now();
+      
+      console.log(`🔍 [verifyEmailToken] Token found for UID: ${stored.uid}, Email: ${stored.email}`);
+      console.log(`🔍 [verifyEmailToken] Token expires: ${new Date(stored.expiresAt).toISOString()}, Now: ${new Date(now).toISOString()}`);
+      
+      if (now > stored.expiresAt) {
+        console.warn(`⚠️ [verifyEmailToken] Token expired. Expires: ${new Date(stored.expiresAt).toISOString()}, Now: ${new Date(now).toISOString()}`);
+        // Delete expired token
+        await db.collection("emailVerificationTokens").doc(normalizedToken).delete();
+        return { success: false, message: "Verification token expired. Please request a new verification email." };
+      }
+      
+      // Check if email is already verified before proceeding
+      try {
+        const user = await admin.auth().getUser(stored.uid);
+        if (user.emailVerified) {
+          console.log(`✅ [verifyEmailToken] Email already verified for ${stored.email}`);
+          // Delete token since it's already been used
+          await db.collection("emailVerificationTokens").doc(normalizedToken).delete();
+          return { success: true, message: "Email already verified" };
+        }
+      } catch (userCheckError) {
+        console.warn(`⚠️ [verifyEmailToken] Could not check user status:`, userCheckError.message);
+        // Continue with verification attempt
+      }
+      
+      console.log(`✅ [verifyEmailToken] Token valid, verifying user: ${stored.uid}`);
+      
+      // Mark email as verified in Firebase with timeout
+      const firebasePromise = admin.auth().updateUser(stored.uid, {
+        emailVerified: true,
+      });
+      
+      const firebaseTimeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Firebase update timeout")), 10000)
+      );
+      
+      await Promise.race([firebasePromise, firebaseTimeout]);
+      console.log(`✅ [verifyEmailToken] Firebase auth updated`);
+      
+      // Update in Firestore with timeout
+      const firestorePromise = db.collection("users").doc(stored.uid).update({
+        emailVerified: true,
+      });
+      
+      const firestoreTimeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Firestore update timeout")), 10000)
+      );
+      
+      await Promise.race([firestorePromise, firestoreTimeout]);
+      console.log(`✅ [verifyEmailToken] Firestore updated`);
+      
+      // Remove token from Firestore
+      await db.collection("emailVerificationTokens").doc(normalizedToken).delete();
+      console.log(`✅ [verifyEmailToken] Token removed from storage`);
+      
+      return { success: true, message: "Email verified successfully" };
+    } catch (readError) {
+      console.error(`❌ [verifyEmailToken] Error reading from Firestore:`, readError);
+      console.error(`❌ [verifyEmailToken] Error stack:`, readError.stack);
+      throw readError;
     }
-
-    console.log(`✅ [verifyEmailToken] Token valid, verifying user: ${stored.uid}`);
-
-    // Mark email as verified in Firebase with timeout
-    const firebasePromise = admin.auth().updateUser(stored.uid, {
-      emailVerified: true,
-    });
-    
-    const firebaseTimeout = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Firebase update timeout")), 10000)
-    );
-    
-    await Promise.race([firebasePromise, firebaseTimeout]);
-    console.log(`✅ [verifyEmailToken] Firebase auth updated`);
-
-    // Update in Firestore with timeout
-    const firestorePromise = db.collection("users").doc(stored.uid).update({
-      emailVerified: true,
-    });
-    
-    const firestoreTimeout = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Firestore update timeout")), 10000)
-    );
-    
-    await Promise.race([firestorePromise, firestoreTimeout]);
-    console.log(`✅ [verifyEmailToken] Firestore updated`);
-
-    // Remove token from Firestore
-    await db.collection("emailVerificationTokens").doc(token).delete();
-    console.log(`✅ [verifyEmailToken] Token removed from storage`);
-
-    return { success: true, message: "Email verified successfully" };
   } catch (error) {
     console.error("❌ [verifyEmailToken] Error:", error);
     console.error("❌ [verifyEmailToken] Error stack:", error.stack);
