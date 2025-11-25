@@ -1534,12 +1534,17 @@ app.get("/auth/verify-email", async (req, res) => {
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   
   try {
-    const { token } = req.query;
+    let { token } = req.query;
     if (!token) {
       console.error("❌ [Verify Email] No token provided");
       return res.status(400).json({ success: false, message: "Token required" });
     }
 
+    // Decode URL-encoded token (in case it was encoded)
+    token = decodeURIComponent(token);
+    console.log(`🔍 [Verify Email] Token received (length: ${token.length})`);
+    console.log(`🔍 [Verify Email] Token (first 20 chars): ${token.substring(0, 20)}...`);
+    
     console.log(`🔍 [Verify Email] Verifying token...`);
     const startTime = Date.now();
     
