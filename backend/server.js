@@ -1493,19 +1493,43 @@ app.post("/auth/verify-phone-code", verifyFirebaseToken, async (req, res) => {
 
 // ⭐️ NEW AUTH ROUTES - Email Verification
 app.post("/auth/send-verification-email", verifyFirebaseToken, async (req, res) => {
+  console.log(`📧 [Send Verification Email] Request received for UID: ${req.user.uid}`);
+  
   try {
     const uid = req.user.uid;
     const email = req.user.email;
     
     if (!email) {
+      console.error("❌ [Send Verification Email] No email found");
       return res.status(400).json({ success: false, message: "Email not found" });
     }
 
-    const result = await sendEmailVerification(uid, email);
+    console.log(`📧 [Send Verification Email] Starting email send for: ${email}`);
+    const startTime = Date.now();
+    
+    // Add timeout wrapper to ensure we always respond
+    const emailPromise = sendEmailVerification(uid, email);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Email verification request timeout after 35 seconds")), 35000)
+    );
+    
+    const result = await Promise.race([emailPromise, timeoutPromise]);
+    const duration = Date.now() - startTime;
+    console.log(`✅ [Send Verification Email] Completed in ${duration}ms`);
+    
     res.json(result);
   } catch (err) {
-    console.error("❌ Error sending verification email:", err);
-    res.status(500).json({ success: false, message: "Failed to send verification email" });
+    console.error("❌ [Send Verification Email] Error:", err);
+    console.error("❌ [Send Verification Email] Error message:", err.message);
+    console.error("❌ [Send Verification Email] Error stack:", err.stack);
+    
+    // Always respond, even on error
+    if (!res.headersSent) {
+      const errorMessage = err.message && err.message.includes("timeout") 
+        ? "Email verification request timed out. Please try again."
+        : "Failed to send verification email. Please try again later.";
+      res.status(500).json({ success: false, message: errorMessage });
+    }
   }
 });
 

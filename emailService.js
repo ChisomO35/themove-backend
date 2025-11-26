@@ -28,15 +28,18 @@ const transporter = nodemailer.createTransport({
   socketTimeout: 10000, // 10 seconds
 });
 
-// Verify transporter configuration on startup (non-blocking)
-transporter.verify(function (error, success) {
-  if (error) {
-    console.error("❌ Email transporter verification failed:", error.message);
-    console.error("⚠️ Email sending may fail. Check EMAIL_PASSWORD and SMTP settings.");
-  } else {
-    console.log("✅ Email transporter is ready to send emails");
-  }
-});
+// Verify transporter configuration on startup (non-blocking, with timeout)
+// Don't block server startup if email verification fails
+setTimeout(() => {
+  transporter.verify(function (error, success) {
+    if (error) {
+      console.error("❌ Email transporter verification failed:", error.message);
+      console.error("⚠️ Email sending may fail. Check EMAIL_PASSWORD and SMTP settings.");
+    } else {
+      console.log("✅ Email transporter is ready to send emails");
+    }
+  });
+}, 2000); // Wait 2 seconds after server starts before verifying
 
 // Send email verification
 async function sendVerificationEmail(email, verificationUrl) {
