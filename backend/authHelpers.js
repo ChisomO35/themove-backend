@@ -131,6 +131,26 @@ async function sendEmailVerification(uid, email) {
   try {
     if (!db) db = admin.firestore();
 
+    // ✅ FIX: Delete any old tokens for this email to prevent stale tokens from previous signups
+    try {
+      const oldTokensSnapshot = await db
+        .collection("emailVerificationTokens")
+        .where("email", "==", email)
+        .get();
+      
+      if (!oldTokensSnapshot.empty) {
+        const batch = db.batch();
+        oldTokensSnapshot.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
+        console.log(`🧹 [sendEmailVerification] Deleted ${oldTokensSnapshot.size} old token(s) for ${email}`);
+      }
+    } catch (cleanupError) {
+      console.warn("⚠️ [sendEmailVerification] Could not clean up old tokens:", cleanupError.message);
+      // Continue anyway - not critical
+    }
+
     const token = generateSecureToken();
 
     await db.collection("emailVerificationTokens").doc(token).set({
@@ -197,14 +217,24 @@ async function verifyEmailToken(token) {
       return { success: false, message: "Verification token expired" };
     }
 
+    // ✅ FIX: Check if user exists before trying to verify
+    let user;
     try {
-      const user = await admin.auth().getUser(stored.uid);
-      if (user.emailVerified) {
-        await db.collection("emailVerificationTokens").doc(normalizedToken).delete();
-        return { success: true, message: "Email already verified" };
-      }
-    } catch {}
+      user = await admin.auth().getUser(stored.uid);
+    } catch (userError) {
+      // User doesn't exist (was deleted) - delete the stale token
+      console.warn(`⚠️ [verifyEmailToken] User ${stored.uid} does not exist (likely deleted). Deleting stale token.`);
+      await db.collection("emailVerificationTokens").doc(normalizedToken).delete();
+      return { success: false, message: "Invalid or expired verification token. Please request a new verification email." };
+    }
 
+    // User exists - check if already verified
+    if (user.emailVerified) {
+      await db.collection("emailVerificationTokens").doc(normalizedToken).delete();
+      return { success: true, message: "Email already verified" };
+    }
+
+    // Verify the email
     await admin.auth().updateUser(stored.uid, { emailVerified: true });
     await db.collection("users").doc(stored.uid).update({ emailVerified: true });
 
