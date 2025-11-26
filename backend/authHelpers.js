@@ -152,6 +152,9 @@ async function sendEmailVerification(uid, email) {
     }
 
     const token = generateSecureToken();
+    
+    console.log(`🔍 [sendEmailVerification] Generated token length: ${token.length}`);
+    console.log(`🔍 [sendEmailVerification] Generated token (first 50 chars): ${token.substring(0, 50)}`);
 
     await db.collection("emailVerificationTokens").doc(token).set({
       uid,
@@ -159,8 +162,11 @@ async function sendEmailVerification(uid, email) {
       expiresAt: Date.now() + 24 * 60 * 60 * 1000,
       createdAt: Date.now(),
     });
+    
+    console.log(`✅ [sendEmailVerification] Token stored in Firestore with doc ID: ${token.substring(0, 50)}...`);
 
     const verificationUrl = `${process.env.PUBLIC_APP_URL || "https://usethemove.com"}/verify-email?token=${token}`;
+    console.log(`🔍 [sendEmailVerification] Verification URL (first 100 chars): ${verificationUrl.substring(0, 100)}...`);
 
     const { sendVerificationEmail } = require("./emailService");
     await sendVerificationEmail(email, verificationUrl);
@@ -175,20 +181,36 @@ async function sendEmailVerification(uid, email) {
 // Verify email token (FIXED VERSION)
 async function verifyEmailToken(token) {
   console.log(`🔍 [verifyEmailToken] Starting verification for token: ${token ? token.substring(0, 10) + "..." : "MISSING"}`);
+  console.log(`🔍 [verifyEmailToken] Full token length: ${token ? token.length : 0}`);
+  console.log(`🔍 [verifyEmailToken] Full token (first 50 chars): ${token ? token.substring(0, 50) : "MISSING"}`);
 
   try {
     if (!db) db = admin.firestore();
 
     if (!token) return { success: false, message: "Token required" };
 
-    const normalizedToken = token.trim();
+    // Try to decode URL encoding if present (some email clients/browsers encode URLs)
+    let normalizedToken = token.trim();
+    try {
+      // Try decoding - if it's already decoded, decodeURIComponent will throw or return same value
+      const decoded = decodeURIComponent(normalizedToken);
+      if (decoded !== normalizedToken) {
+        console.log(`🔍 [verifyEmailToken] Token was URL-encoded, decoded it`);
+        normalizedToken = decoded;
+      }
+    } catch (e) {
+      // Not URL-encoded, continue with original
+      console.log(`🔍 [verifyEmailToken] Token is not URL-encoded (or decode failed)`);
+    }
 
-    console.log(`🔍 [verifyEmailToken] Normalized token: ${normalizedToken}`);
+    console.log(`🔍 [verifyEmailToken] Normalized token length: ${normalizedToken.length}`);
+    console.log(`🔍 [verifyEmailToken] Normalized token (first 50 chars): ${normalizedToken.substring(0, 50)}`);
 
     // ✅ FIX — declare tokenDoc here so it's available after the try block
     let tokenDoc;
 
     try {
+      // Try exact match first
       const tokenReadPromise = db.collection("emailVerificationTokens").doc(normalizedToken).get();
       const tokenReadTimeout = new Promise((_, reject) =>
         setTimeout(() => reject(new Error("Firestore token read timeout")), 10000)
@@ -197,7 +219,25 @@ async function verifyEmailToken(token) {
       // ❗ FIX — assign to outer-scoped tokenDoc
       tokenDoc = await Promise.race([tokenReadPromise, tokenReadTimeout]);
 
-      console.log(`🔍 [verifyEmailToken] Token document exists: ${tokenDoc.exists}`);
+      console.log(`🔍 [verifyEmailToken] Token document exists (exact match): ${tokenDoc.exists}`);
+      
+      // If not found, try querying by token value to see what's actually stored
+      if (!tokenDoc.exists) {
+        console.log(`🔍 [verifyEmailToken] Token not found with exact match, checking all tokens for this pattern...`);
+        const allTokensSnapshot = await db
+          .collection("emailVerificationTokens")
+          .where("email", "!=", "__dummy__") // Just to get a query
+          .limit(5)
+          .get();
+        
+        console.log(`🔍 [verifyEmailToken] Found ${allTokensSnapshot.size} token(s) in collection`);
+        allTokensSnapshot.forEach((doc) => {
+          const docId = doc.id;
+          console.log(`🔍 [verifyEmailToken] Stored token ID (first 50 chars): ${docId.substring(0, 50)}, length: ${docId.length}`);
+          const data = doc.data();
+          console.log(`🔍 [verifyEmailToken] Stored token data:`, { uid: data.uid, email: data.email });
+        });
+      }
     } catch (readError) {
       console.error("❌ [verifyEmailToken] Firestore read error:", readError);
       throw readError;
@@ -205,15 +245,55 @@ async function verifyEmailToken(token) {
 
     // Handle missing token
     if (!tokenDoc.exists) {
-      console.log("🟡 tokenDoc missing → returning already verified");
-      return { success: true, message: "Email already verified" };
+      console.log(`⚠️ [verifyEmailToken] Token not found in storage. Looking for: ${normalizedToken.substring(0, 50)}...`);
+      console.log(`⚠️ [verifyEmailToken] Attempting to find token by partial match or checking all recent tokens...`);
+      
+      // Try to find the token by querying all tokens and comparing
+      // This handles cases where URL encoding/decoding might have changed the token slightly
+      try {
+        const allTokensSnapshot = await db
+          .collection("emailVerificationTokens")
+          .where("expiresAt", ">", Date.now()) // Only non-expired tokens
+          .limit(100)
+          .get();
+        
+        console.log(`🔍 [verifyEmailToken] Found ${allTokensSnapshot.size} non-expired token(s) in collection`);
+        
+        // Try to find a token that matches (exact or close match)
+        let foundToken = null;
+        for (const doc of allTokensSnapshot.docs) {
+          const docId = doc.id;
+          // Check if tokens match exactly or if one is URL-encoded version of the other
+          if (docId === normalizedToken || 
+              decodeURIComponent(docId) === normalizedToken ||
+              docId === encodeURIComponent(normalizedToken) ||
+              decodeURIComponent(normalizedToken) === docId) {
+            foundToken = doc;
+            console.log(`✅ [verifyEmailToken] Found matching token using fallback matching!`);
+            break;
+          }
+        }
+        
+        if (foundToken) {
+          tokenDoc = foundToken;
+        } else {
+          // Still not found - return error
+          console.log(`❌ [verifyEmailToken] Token not found even with fallback matching`);
+          return { success: false, message: "Invalid or expired verification token. Please request a new verification email." };
+        }
+      } catch (queryError) {
+        console.error("❌ [verifyEmailToken] Error querying tokens:", queryError);
+        return { success: false, message: "Invalid or expired verification token. Please request a new verification email." };
+      }
     }
 
     const stored = tokenDoc.data();
+    // Use the actual document ID (might be different from normalizedToken if found via fallback)
+    const actualTokenId = tokenDoc.id;
     const now = Date.now();
 
     if (now > stored.expiresAt) {
-      await db.collection("emailVerificationTokens").doc(normalizedToken).delete();
+      await db.collection("emailVerificationTokens").doc(actualTokenId).delete();
       return { success: false, message: "Verification token expired" };
     }
 
@@ -224,13 +304,13 @@ async function verifyEmailToken(token) {
     } catch (userError) {
       // User doesn't exist (was deleted) - delete the stale token
       console.warn(`⚠️ [verifyEmailToken] User ${stored.uid} does not exist (likely deleted). Deleting stale token.`);
-      await db.collection("emailVerificationTokens").doc(normalizedToken).delete();
+      await db.collection("emailVerificationTokens").doc(actualTokenId).delete();
       return { success: false, message: "Invalid or expired verification token. Please request a new verification email." };
     }
 
     // User exists - check if already verified
     if (user.emailVerified) {
-      await db.collection("emailVerificationTokens").doc(normalizedToken).delete();
+      await db.collection("emailVerificationTokens").doc(actualTokenId).delete();
       return { success: true, message: "Email already verified" };
     }
 
@@ -238,7 +318,7 @@ async function verifyEmailToken(token) {
     await admin.auth().updateUser(stored.uid, { emailVerified: true });
     await db.collection("users").doc(stored.uid).update({ emailVerified: true });
 
-    await db.collection("emailVerificationTokens").doc(normalizedToken).delete();
+    await db.collection("emailVerificationTokens").doc(actualTokenId).delete();
 
     return { success: true, message: "Email verified successfully" };
   } catch (error) {
