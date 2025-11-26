@@ -11,7 +11,8 @@ const FROM_NAME = process.env.FROM_NAME || "TheMove";
 const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
 
 // Create transporter with Office365 SMTP
-// Try port 465 first (SSL), fallback to 587 (TLS) if needed
+// Note: Railway blocks SMTP on free/trial/hobby plans
+// You need Railway Pro plan or use a transactional email service (Resend/SendGrid)
 const smtpConfig = {
   host: "smtp.office365.com",
   auth: {
@@ -31,8 +32,15 @@ const smtpConfig = {
   },
 };
 
-// If port 465 doesn't work, we can try 587 as fallback
 const transporter = nodemailer.createTransport(smtpConfig);
+
+// Create fallback transporter for port 587 (TLS)
+const transporter587 = nodemailer.createTransport({
+  ...smtpConfig,
+  port: 587,
+  secure: false,
+  requireTLS: true,
+});
 
 // Verify transporter configuration on startup (non-blocking, with timeout)
 // Don't block server startup if email verification fails
@@ -176,12 +184,27 @@ async function sendPasswordResetEmail(email, resetUrl) {
     };
 
     // Add timeout to email sending (30 seconds max)
-    const sendPromise = transporter.sendMail(mailOptions);
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
-    );
-
-    const info = await Promise.race([sendPromise, timeoutPromise]);
+    // Try port 465 first, fallback to 587 if it fails
+    let info;
+    try {
+      const sendPromise = transporter.sendMail(mailOptions);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
+      );
+      info = await Promise.race([sendPromise, timeoutPromise]);
+    } catch (error) {
+      // If port 465 fails, try port 587
+      if (error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED') {
+        console.log("⚠️ Port 465 failed, trying port 587...");
+        const sendPromise587 = transporter587.sendMail(mailOptions);
+        const timeoutPromise587 = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
+        );
+        info = await Promise.race([sendPromise587, timeoutPromise587]);
+      } else {
+        throw error;
+      }
+    }
     console.log(`✅ Password reset email sent to ${email}, messageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
