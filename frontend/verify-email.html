@@ -11,40 +11,27 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: { sans: ["Poppins", "sans-serif"] },
-            colors: {
-              primary: "#4F46E5",
-              accent: "#6366F1",
-              background: "#FAFAFA",
-              dark: "#1E1B4B",
-            },
-          },
-        },
-      };
-    </script>
   </head>
 
   <body class="bg-background font-sans text-gray-800 flex flex-col min-h-screen">
-    <!-- ✅ Navbar -->
+
     <header class="navbar">
       <div class="navbar-container">
         <a href="/" class="navbar-logo">TheMove</a>
       </div>
     </header>
 
-    <!-- ✅ Main Content -->
     <main class="flex-grow flex items-center justify-center py-12 px-4">
       <div class="container container-sm">
         <div class="card max-w-md mx-auto fade-in">
+
+          <!-- Loading -->
           <div id="loading-state">
             <h1 class="heading-2 text-center mb-4">Verifying Email...</h1>
-            <p class="text-muted text-center">Please wait while we verify your email address.</p>
+            <p class="text-muted text-center">Please wait while we verify your email.</p>
           </div>
 
+          <!-- Success -->
           <div id="success-state" class="hidden">
             <div class="text-center mb-6">
               <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
@@ -55,9 +42,10 @@
               <h1 class="heading-2 mb-2">Email Verified!</h1>
               <p class="text-muted">Your email has been successfully verified.</p>
             </div>
-            <a href="/login" class="btn btn-primary btn-full" onclick="localStorage.removeItem('emailVerified')">Continue to Login</a>
+            <a href="/login" class="btn btn-primary btn-full">Continue to Login</a>
           </div>
 
+          <!-- Error -->
           <div id="error-state" class="hidden">
             <div class="text-center mb-6">
               <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
@@ -66,140 +54,56 @@
                 </svg>
               </div>
               <h1 class="heading-2 mb-2">Verification Failed</h1>
-              <p class="text-muted mb-4" id="error-message">The verification link is invalid or has expired.</p>
+              <p class="text-muted mb-4" id="error-message">The link is invalid or expired.</p>
             </div>
-            <a href="/login" class="btn btn-secondary btn-full" onclick="localStorage.removeItem('emailVerified')">Back to Login</a>
+            <a href="/login" class="btn btn-secondary btn-full">Back to Login</a>
           </div>
+
         </div>
       </div>
     </main>
 
-    <!-- ✅ FIXED SCRIPT (wrapped in async IIFE) -->
     <script type="module">
-      (async () => {
+      const loading = document.getElementById("loading-state");
+      const success = document.getElementById("success-state");
+      const error = document.getElementById("error-state");
+      const errorMsg = document.getElementById("error-message");
 
-        // Get token from URL FIRST (before we remove it)
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get("token");
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("token");
 
-        // FIX #1: Remove token from URL immediately (prevents browser prefetching/reloading same link)
-        if (token) {
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
+      // If no token at all → fail
+      if (!token) {
+        loading.classList.add("hidden");
+        error.classList.remove("hidden");
+        errorMsg.textContent = "No verification token provided.";
+      } else {
+        verifyToken();
+      }
 
-        // FIX #3: Check if already verified (idempotent client-side check)
-        if (localStorage.getItem("emailVerified") === "true") {
-          // Already verified - show success immediately
-          document.getElementById("loading-state").classList.add("hidden");
-          document.getElementById("success-state").classList.remove("hidden");
-          console.log("🔁 Email already verified — skipping API call");
-          return;   /* ✅ VALID NOW — INSIDE FUNCTION */
-        } else {
-          // Prevent multiple verification calls
-          let verificationInProgress = false;
-          let verificationCompleted = false;
+      async function verifyToken() {
+        try {
+          const res = await fetch(
+            `https://themove-backend-production.up.railway.app/auth/verify-email?token=${token}`,
+            { method: "GET" }
+          );
 
-          // Verify email and redirect to login
-          async function verifyEmail() {
-            // Prevent duplicate calls
-            if (verificationInProgress || verificationCompleted) {
-              console.log("⚠️ [Frontend] Verification already in progress or completed, skipping duplicate call");
-              return;
-            }
-            
-            verificationInProgress = true;
-            if (!token) {
-              // No token - show error state
-              verificationCompleted = true;
-              document.getElementById("loading-state").classList.add("hidden");
-              document.getElementById("error-state").classList.remove("hidden");
-              document.getElementById("error-message").textContent = "No verification token provided.";
-              return;
-            }
+          const data = await res.json();
 
-            console.log(`🔍 [Frontend] Starting email verification for token: ${token.substring(0, 10)}...`);
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => {
-              console.error(`⏱️ [Frontend] Verification request timed out`);
-              controller.abort();
-            }, 15000); // 15 second timeout
+          loading.classList.add("hidden");
 
-            try {
-              const url = `https://themove-backend-production.up.railway.app/auth/verify-email?token=${token}`;
-              console.log(`📤 [Frontend] Sending request to: ${url}`);
-              
-              const res = await fetch(url, {
-                signal: controller.signal,
-                method: 'GET',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                mode: 'cors',
-                credentials: 'include'
-              });
-
-              clearTimeout(timeoutId);
-              console.log(`📥 [Frontend] Response received, status: ${res.status}`);
-
-              if (!res.ok) {
-                const errorText = await res.text();
-                console.error(`❌ [Frontend] HTTP error! status: ${res.status}, body: ${errorText}`);
-                verificationCompleted = true;
-                document.getElementById("loading-state").classList.add("hidden");
-                document.getElementById("error-state").classList.remove("hidden");
-                document.getElementById("error-message").textContent = "Verification failed. Please try again.";
-                return;
-              }
-
-              const data = await res.json();
-              console.log(`✅ [Frontend] Response data:`, data);
-
-              if (data.success) {
-                console.log(`✅ [Frontend] Verification successful!`);
-                verificationCompleted = true;
-                localStorage.setItem("emailVerified", "true");
-
-                document.getElementById("loading-state").classList.add("hidden");
-                document.getElementById("success-state").classList.remove("hidden");
-              } else {
-                console.error(`❌ [Frontend] Verification failed:`, data.message);
-                verificationCompleted = true;
-
-                document.getElementById("loading-state").classList.add("hidden");
-                document.getElementById("error-state").classList.remove("hidden");
-                document.getElementById("error-message").textContent = data.message || "Verification failed.";
-              }
-            } catch (err) {
-              clearTimeout(timeoutId);
-              console.error("❌ [Frontend] Verification error:", err);
-              
-              let errorMessage = "Verification failed. Please try again.";
-              if (err.name === 'AbortError') {
-                errorMessage = "Request timed out. Please check your connection and try again.";
-              } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-                errorMessage = "Network error. Please check your connection and try again.";
-              }
-
-              verificationCompleted = true;
-              document.getElementById("loading-state").classList.add("hidden");
-              document.getElementById("error-state").classList.remove("hidden");
-              document.getElementById("error-message").textContent = errorMessage;
-            } finally {
-              verificationInProgress = false;
-            }
-          }
-
-          // Automatically verify (only once)
-          if (token) {
-            verifyEmail();
+          if (data.success) {
+            success.classList.remove("hidden");
           } else {
-            document.getElementById("loading-state").classList.add("hidden");
-            document.getElementById("error-state").classList.remove("hidden");
-            document.getElementById("error-message").textContent = "No verification token provided.";
+            error.classList.remove("hidden");
+            errorMsg.textContent = data.message || "Verification failed.";
           }
+        } catch (err) {
+          loading.classList.add("hidden");
+          error.classList.remove("hidden");
+          errorMsg.textContent = "Network error. Try again.";
         }
-
-      })();  <!-- END IIFE -->
+      }
     </script>
   </body>
 </html>
