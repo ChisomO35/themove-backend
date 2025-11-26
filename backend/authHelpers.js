@@ -12,12 +12,25 @@ const twilioClient = twilio(
 );
 
 // Get Firestore instance (will use existing admin app if already initialized)
+// ✅ FIX: Ensure we get the Firestore instance from the same initialized Firebase app
+// This ensures authHelpers uses the same Firestore project as server.js
 let db;
-try {
-  db = admin.firestore();
-} catch (error) {
-  // If admin not initialized yet, it will be initialized in server.js
-  // We'll get db lazily when needed
+function getDb() {
+  if (!db) {
+    // Ensure Firebase is initialized
+    if (!admin.apps.length) {
+      throw new Error("Firebase Admin not initialized. Make sure server.js initializes Firebase before using authHelpers.");
+    }
+    // Get Firestore instance from the default app (same one server.js uses)
+    db = admin.firestore();
+    db.settings({ ignoreUndefinedProperties: true });
+    
+    // Log to verify we're using the correct instance
+    const app = admin.app();
+    const projectId = app.options.projectId || app.options.credential?.projectId || "unknown";
+    console.log(`✅ [authHelpers] Firestore instance initialized for project: ${projectId}`);
+  }
+  return db;
 }
 
 // Phone verification code storage (in production, use Redis or Firestore)
@@ -129,7 +142,7 @@ function verifyPhoneCode(phoneNumber, code) {
 // Send email verification (using proper email service)
 async function sendEmailVerification(uid, email) {
   try {
-    if (!db) db = admin.firestore();
+    const db = getDb();
 
     // ✅ FIX: Delete any old tokens for this email to prevent stale tokens from previous signups
     try {
@@ -185,7 +198,7 @@ async function verifyEmailToken(token) {
   console.log(`🔍 [verifyEmailToken] Full token (first 50 chars): ${token ? token.substring(0, 50) : "MISSING"}`);
 
   try {
-    if (!db) db = admin.firestore();
+    const db = getDb();
 
     if (!token) return { success: false, message: "Token required" };
 
@@ -419,7 +432,7 @@ async function verifyEmailToken(token) {
 // Password reset functions unchanged...
 async function sendPasswordResetEmail(email) {
   try {
-    if (!db) db = admin.firestore();
+    const db = getDb();
 
     let user;
     try {
@@ -452,7 +465,7 @@ async function sendPasswordResetEmail(email) {
 
 async function verifyPasswordResetToken(token) {
   try {
-    if (!db) db = admin.firestore();
+    const db = getDb();
 
     const tokenDoc = await db.collection("passwordResetTokens").doc(token).get();
 
@@ -478,7 +491,7 @@ async function resetPassword(token, newPassword) {
   if (!verification.success) return verification;
 
   try {
-    if (!db) db = admin.firestore();
+    const db = getDb();
 
     await admin.auth().updateUser(verification.uid, { password: newPassword });
     await db.collection("passwordResetTokens").doc(token).delete();
@@ -501,7 +514,7 @@ async function cleanupExpiredTokens() {
   }
 
   try {
-    if (!db) db = admin.firestore();
+    const db = getDb();
 
     const emailTokensSnapshot = await db
       .collection("emailVerificationTokens")
@@ -515,7 +528,7 @@ async function cleanupExpiredTokens() {
   } catch {}
 
   try {
-    if (!db) db = admin.firestore();
+    const db = getDb();
 
     const passwordTokensSnapshot = await db
       .collection("passwordResetTokens")
