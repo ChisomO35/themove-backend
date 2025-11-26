@@ -72,38 +72,50 @@
       const params = new URLSearchParams(window.location.search);
       const token = params.get("token");
 
-      // If no token at all → fail
-      if (!token) {
-        loading.classList.add("hidden");
-        error.classList.remove("hidden");
-        errorMsg.textContent = "No verification token provided.";
-      } else {
-        verifyToken();
+      async function start() {
+        if (!token) {
+          showError("No verification token provided.");
+          return;
+        }
+
+        // 1️⃣ Send token to backend
+        await fetch(
+          `https://themove-backend-production.up.railway.app/auth/verify-email?token=${token}`,
+          { method: "GET" }
+        ).catch(() => {}); // ignore errors — token might already be used
+
+        // 2️⃣ Now check user's verified status
+        checkStatus();
       }
 
-      async function verifyToken() {
+      async function checkStatus() {
         try {
           const res = await fetch(
-            `https://themove-backend-production.up.railway.app/auth/verify-email?token=${token}`,
-            { method: "GET" }
+            "https://themove-backend-production.up.railway.app/auth/status",
+            { credentials: "include" }
           );
 
           const data = await res.json();
 
           loading.classList.add("hidden");
 
-          if (data.success) {
+          if (data.emailVerified === true) {
             success.classList.remove("hidden");
           } else {
-            error.classList.remove("hidden");
-            errorMsg.textContent = data.message || "Verification failed.";
+            showError("Email is not verified. The link may be expired.");
           }
         } catch (err) {
-          loading.classList.add("hidden");
-          error.classList.remove("hidden");
-          errorMsg.textContent = "Network error. Try again.";
+          showError("Network error. Try again.");
         }
       }
+
+      function showError(msg) {
+        loading.classList.add("hidden");
+        error.classList.remove("hidden");
+        errorMsg.textContent = msg;
+      }
+
+      start();
     </script>
   </body>
 </html>
