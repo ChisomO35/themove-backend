@@ -1,59 +1,27 @@
 // emailService.js
-// Email service using Nodemailer with Office365 SMTP
-// Install: npm install nodemailer
-// Updated: Using Nodemailer instead of Resend
+// Email service using Mailgun API
+// Install: npm install mailgun-js
+// Updated: Using Mailgun API instead of Nodemailer (works on all Railway plans)
 
-const nodemailer = require("nodemailer");
+const mailgun = require("mailgun-js");
 
 // Email configuration
 const FROM_EMAIL = process.env.FROM_EMAIL || "support@usethemove.com";
 const FROM_NAME = process.env.FROM_NAME || "TheMove";
-const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
+const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY;
+const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN;
 
-// Create transporter with Office365 SMTP
-// Note: Railway blocks SMTP on free/trial/hobby plans
-// You need Railway Pro plan or use a transactional email service (Resend/SendGrid)
-const smtpConfig = {
-  host: "smtp.office365.com",
-  auth: {
-    user: FROM_EMAIL, // support@usethemove.com
-    pass: EMAIL_PASSWORD, // from GoDaddy/MS365
-  },
-  connectionTimeout: 15000, // 15 seconds
-  greetingTimeout: 15000, // 15 seconds
-  socketTimeout: 15000, // 15 seconds
-  // Try port 465 with SSL first (often less blocked than 587)
-  port: 465,
-  secure: true, // true for 465, false for other ports
-  requireTLS: false, // Not needed for SSL
-  tls: {
-    ciphers: 'SSLv3',
-    rejectUnauthorized: false,
-  },
-};
-
-const transporter = nodemailer.createTransport(smtpConfig);
-
-// Create fallback transporter for port 587 (TLS)
-const transporter587 = nodemailer.createTransport({
-  ...smtpConfig,
-  port: 587,
-  secure: false,
-  requireTLS: true,
-});
-
-// Verify transporter configuration on startup (non-blocking, with timeout)
-// Don't block server startup if email verification fails
-setTimeout(() => {
-  transporter.verify(function (error, success) {
-    if (error) {
-      console.error("❌ Email transporter verification failed:", error.message);
-      console.error("⚠️ Email sending may fail. Check EMAIL_PASSWORD and SMTP settings.");
-    } else {
-      console.log("✅ Email transporter is ready to send emails");
-    }
+// Initialize Mailgun client
+let mailgunClient = null;
+if (MAILGUN_API_KEY && MAILGUN_DOMAIN) {
+  mailgunClient = mailgun({
+    apiKey: MAILGUN_API_KEY,
+    domain: MAILGUN_DOMAIN,
   });
-}, 2000); // Wait 2 seconds after server starts before verifying
+  console.log("✅ Mailgun client initialized");
+} else {
+  console.warn("⚠️ Mailgun not configured: MAILGUN_API_KEY or MAILGUN_DOMAIN missing");
+}
 
 // Send email verification
 async function sendVerificationEmail(email, verificationUrl) {
@@ -92,49 +60,41 @@ async function sendVerificationEmail(email, verificationUrl) {
   `;
 
   try {
-    // Check if EMAIL_PASSWORD is set
-    if (!EMAIL_PASSWORD) {
-      console.error("❌ EMAIL_PASSWORD environment variable is not set");
-      throw new Error("Email service not configured: EMAIL_PASSWORD missing");
+    // Check if Mailgun is configured
+    if (!mailgunClient) {
+      console.error("❌ Mailgun not configured: MAILGUN_API_KEY or MAILGUN_DOMAIN missing");
+      throw new Error("Email service not configured: Mailgun credentials missing");
     }
 
-    const mailOptions = {
+    const data = {
       from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
       to: email,
-      replyTo: process.env.REPLY_TO_EMAIL || FROM_EMAIL,
       subject,
       text, // Plain text version
       html,
-      headers: {
-        'X-Entity-Ref-ID': `verify-${Date.now()}`, // Unique tracking
-        'List-Unsubscribe': `<mailto:${process.env.REPLY_TO_EMAIL || FROM_EMAIL}?subject=unsubscribe>`, // Help with spam filters
-      },
+      'h:Reply-To': process.env.REPLY_TO_EMAIL || FROM_EMAIL,
+      'h:X-Entity-Ref-ID': `verify-${Date.now()}`, // Unique tracking
+      'h:List-Unsubscribe': `<mailto:${process.env.REPLY_TO_EMAIL || FROM_EMAIL}?subject=unsubscribe>`, // Help with spam filters
     };
 
     // Add timeout to email sending (30 seconds max)
-    // Try port 465 first, fallback to 587 if it fails
-    let info;
-    try {
-      const sendPromise = transporter.sendMail(mailOptions);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
-      );
-      info = await Promise.race([sendPromise, timeoutPromise]);
-    } catch (error) {
-      // If port 465 fails, try port 587
-      if (error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED') {
-        console.log("⚠️ Port 465 failed, trying port 587...");
-        const sendPromise587 = transporter587.sendMail(mailOptions);
-        const timeoutPromise587 = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
-        );
-        info = await Promise.race([sendPromise587, timeoutPromise587]);
-      } else {
-        throw error;
-      }
-    }
-    console.log(`✅ Verification email sent to ${email}, messageId: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
+    const sendPromise = new Promise((resolve, reject) => {
+      mailgunClient.messages().send(data, (error, body) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(body);
+        }
+      });
+    });
+
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
+    );
+
+    const body = await Promise.race([sendPromise, timeoutPromise]);
+    console.log(`✅ Verification email sent to ${email}, messageId: ${body.id || body.message}`);
+    return { success: true, messageId: body.id || body.message };
   } catch (error) {
     console.error("❌ Error sending verification email:", error);
     console.error("❌ Error details:", error.message);
@@ -179,49 +139,41 @@ async function sendPasswordResetEmail(email, resetUrl) {
   `;
 
   try {
-    // Check if EMAIL_PASSWORD is set
-    if (!EMAIL_PASSWORD) {
-      console.error("❌ EMAIL_PASSWORD environment variable is not set");
-      throw new Error("Email service not configured: EMAIL_PASSWORD missing");
+    // Check if Mailgun is configured
+    if (!mailgunClient) {
+      console.error("❌ Mailgun not configured: MAILGUN_API_KEY or MAILGUN_DOMAIN missing");
+      throw new Error("Email service not configured: Mailgun credentials missing");
     }
 
-    const mailOptions = {
+    const data = {
       from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
       to: email,
-      replyTo: process.env.REPLY_TO_EMAIL || FROM_EMAIL,
       subject,
       text, // Plain text version
       html,
-      headers: {
-        'X-Entity-Ref-ID': `reset-${Date.now()}`, // Unique tracking
-        'List-Unsubscribe': `<mailto:${process.env.REPLY_TO_EMAIL || FROM_EMAIL}?subject=unsubscribe>`, // Help with spam filters
-      },
+      'h:Reply-To': process.env.REPLY_TO_EMAIL || FROM_EMAIL,
+      'h:X-Entity-Ref-ID': `reset-${Date.now()}`, // Unique tracking
+      'h:List-Unsubscribe': `<mailto:${process.env.REPLY_TO_EMAIL || FROM_EMAIL}?subject=unsubscribe>`, // Help with spam filters
     };
 
     // Add timeout to email sending (30 seconds max)
-    // Try port 465 first, fallback to 587 if it fails
-    let info;
-    try {
-      const sendPromise = transporter.sendMail(mailOptions);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
-      );
-      info = await Promise.race([sendPromise, timeoutPromise]);
-    } catch (error) {
-      // If port 465 fails, try port 587
-      if (error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED') {
-        console.log("⚠️ Port 465 failed, trying port 587...");
-        const sendPromise587 = transporter587.sendMail(mailOptions);
-        const timeoutPromise587 = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
-        );
-        info = await Promise.race([sendPromise587, timeoutPromise587]);
-      } else {
-        throw error;
-      }
-    }
-    console.log(`✅ Password reset email sent to ${email}, messageId: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
+    const sendPromise = new Promise((resolve, reject) => {
+      mailgunClient.messages().send(data, (error, body) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(body);
+        }
+      });
+    });
+
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
+    );
+
+    const body = await Promise.race([sendPromise, timeoutPromise]);
+    console.log(`✅ Password reset email sent to ${email}, messageId: ${body.id || body.message}`);
+    return { success: true, messageId: body.id || body.message };
   } catch (error) {
     console.error("❌ Error sending password reset email:", error);
     console.error("❌ Error details:", error.message);
