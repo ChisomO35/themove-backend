@@ -170,7 +170,7 @@
         toast.textContent = message;
         setTimeout(() => {
           toast.classList.remove("show");
-        }, 3000);
+        }, 5000);
       }
     </script>
 
@@ -303,16 +303,24 @@
 
             const emailData = await emailRes.json();
             if (emailData.success) {
+              signupButton.disabled = false;
+              buttonText.classList.remove("hidden");
+              buttonSpinner.classList.add("hidden");
+
               showToast(
                 "📨 Verification email sent! UNC email can take 1–2 minutes to receive messages from new services. Please check your inbox (and spam folder) to verify your email.",
                 "success"
               );
+              signupButton.disabled = true;
             } else {
+              signupButton.disabled = false;
+              buttonText.classList.remove("hidden");
+              buttonSpinner.classList.add("hidden");
               showToast("Account created, but verification email failed. Please try logging in.", "warning");
             }
 
             await signOut(auth);
-            setTimeout(() => (window.location.href = "/login"), 3000);
+            setTimeout(() => (window.location.href = "/login"), 6000);
             // Keep button disabled since we're redirecting
           } catch (err) {
             console.error("❌ Signup error:", err);
