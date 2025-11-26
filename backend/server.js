@@ -1564,10 +1564,11 @@ app.get("/auth/verify-email", async (req, res) => {
       return res.status(400).json({ success: false, message: "Token required" });
     }
 
-    // Decode URL-encoded token (in case it was encoded)
-    token = decodeURIComponent(token);
+    // Token is base64url (URL-safe) - no decoding needed
+    // Just trim any whitespace that might have been added
+    token = token.trim();
     console.log(`🔍 [Verify Email] Token received (length: ${token.length})`);
-    console.log(`🔍 [Verify Email] Token (first 20 chars): ${token.substring(0, 20)}...`);
+    console.log(`🔍 [Verify Email] Token (first 30 chars): ${token.substring(0, 30)}...`);
     
     console.log(`🔍 [Verify Email] Verifying token...`);
     const startTime = Date.now();
