@@ -449,8 +449,9 @@ function extractTimeRange(query) {
 // Core search for SMS
 // ==========================================================
 async function searchPostersForSMS(query, school) {
+  // ✅ VERSION CHECK: If you see this log, the new emoji-free code is running
+  console.log(`🚀 [searchPostersForSMS] CODE VERSION: v2.0 - NO EMOJIS (GSM-7 optimized) - Deployed: ${new Date().toISOString()}`);
   console.log(`🔍 [searchPostersForSMS] Starting search for: "${query}" in ${school}`);
-  console.log(`🔍 [searchPostersForSMS] CODE VERSION: v2.0 - NO EMOJIS (GSM-7 optimized)`);
   try {
     const today = getLocalDate();
 
