@@ -32,9 +32,11 @@ function generateVerificationCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Generate secure token
+// Generate secure token using base64url (URL-safe, email-safe)
+// This prevents email clients and browsers from corrupting the token
+// base64url uses only A-Z, a-z, 0-9, -, _ (no +, /, =, or special chars)
 function generateSecureToken() {
-  return crypto.randomBytes(32).toString("hex");
+  return crypto.randomBytes(32).toString("base64url");
 }
 
 // Normalize phone number to E.164 format
@@ -201,11 +203,12 @@ async function verifyEmailToken(token) {
       return { success: false, message: "Token required" };
     }
 
-    // Normalize token (trim whitespace, handle URL encoding)
+    // Normalize token (trim whitespace only - base64url is already URL-safe)
+    // No need to decode since base64url tokens don't get corrupted by email clients
     const normalizedToken = token.trim();
     console.log(`🔍 [verifyEmailToken] Normalized token length: ${normalizedToken.length}`);
-    console.log(`🔍 [verifyEmailToken] Full token: ${normalizedToken}`);
-    console.log(`🔍 [verifyEmailToken] Token format check - is hex: ${/^[0-9a-f]+$/i.test(normalizedToken)}`);
+    console.log(`🔍 [verifyEmailToken] Token (first 30 chars): ${normalizedToken.substring(0, 30)}...`);
+    console.log(`🔍 [verifyEmailToken] Token format check - is base64url: ${/^[A-Za-z0-9_-]+$/.test(normalizedToken)}`);
     
     // Get token from Firestore with timeout
     console.log(`🔍 [verifyEmailToken] Attempting to read token from Firestore collection: emailVerificationTokens`);

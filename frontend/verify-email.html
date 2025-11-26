@@ -95,8 +95,8 @@
         }, 15000); // 15 second timeout
 
         try {
-          const encodedToken = encodeURIComponent(token);
-          const url = `https://themove-backend-production.up.railway.app/auth/verify-email?token=${encodedToken}`;
+          // No need to encode - base64url tokens are already URL-safe
+          const url = `https://themove-backend-production.up.railway.app/auth/verify-email?token=${token}`;
           console.log(`📤 [Frontend] Sending request to: ${url}`);
           
           const res = await fetch(url, {
