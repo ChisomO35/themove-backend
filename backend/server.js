@@ -93,10 +93,16 @@ if (!admin.apps.length) {
     credential: admin.credential.cert(serviceAccount),
     storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
   });
+  
+  // Log to verify Firebase initialization
+  const app = admin.app();
+  const projectId = serviceAccount.project_id || app.options.projectId || "unknown";
+  console.log(`✅ [server.js] Firebase initialized for project: ${projectId}`);
 }
 
 const db = admin.firestore();
 db.settings({ ignoreUndefinedProperties: true });
+console.log(`✅ [server.js] Firestore instance created`);
 
 // -------------------------
 // Pinecone
