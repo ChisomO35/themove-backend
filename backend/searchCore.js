@@ -927,8 +927,15 @@ async function searchPostersForSMS(query, school) {
     }
   });
 
-    console.log(`✅ [searchPostersForSMS] Returning message, length: ${msg.trim().length}`);
-    return msg.trim();
+    const finalMsg = msg.trim();
+    console.log(`✅ [searchPostersForSMS] Returning message, length: ${finalMsg.length}`);
+    console.log(`✅ [searchPostersForSMS] Message preview (first 200 chars): ${finalMsg.substring(0, 200)}`);
+    // Verify no emojis in message
+    const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu;
+    if (emojiRegex.test(finalMsg)) {
+      console.error(`❌ [searchPostersForSMS] WARNING: Message contains emojis! This will cause UCS-2 encoding.`);
+    }
+    return finalMsg;
   } catch (err) {
     console.error("❌ [searchPostersForSMS] Error:", err);
     console.error("❌ [searchPostersForSMS] Error stack:", err.stack);
