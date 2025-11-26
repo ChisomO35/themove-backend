@@ -450,6 +450,7 @@ function extractTimeRange(query) {
 // ==========================================================
 async function searchPostersForSMS(query, school) {
   console.log(`🔍 [searchPostersForSMS] Starting search for: "${query}" in ${school}`);
+  console.log(`🔍 [searchPostersForSMS] CODE VERSION: v2.0 - NO EMOJIS (GSM-7 optimized)`);
   try {
     const today = getLocalDate();
 
