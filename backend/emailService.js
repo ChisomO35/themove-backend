@@ -112,12 +112,27 @@ async function sendVerificationEmail(email, verificationUrl) {
     };
 
     // Add timeout to email sending (30 seconds max)
-    const sendPromise = transporter.sendMail(mailOptions);
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
-    );
-
-    const info = await Promise.race([sendPromise, timeoutPromise]);
+    // Try port 465 first, fallback to 587 if it fails
+    let info;
+    try {
+      const sendPromise = transporter.sendMail(mailOptions);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
+      );
+      info = await Promise.race([sendPromise, timeoutPromise]);
+    } catch (error) {
+      // If port 465 fails, try port 587
+      if (error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED') {
+        console.log("⚠️ Port 465 failed, trying port 587...");
+        const sendPromise587 = transporter587.sendMail(mailOptions);
+        const timeoutPromise587 = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
+        );
+        info = await Promise.race([sendPromise587, timeoutPromise587]);
+      } else {
+        throw error;
+      }
+    }
     console.log(`✅ Verification email sent to ${email}, messageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
