@@ -141,6 +141,21 @@
           toast.classList.remove("show");
         }, 3000);
       }
+
+      // Check if user was redirected from email verification
+      const urlParams = new URLSearchParams(window.location.search);
+      const verified = urlParams.get("verified");
+      const message = urlParams.get("message");
+
+      if (verified === "success") {
+        showToast("✅ Email verified successfully! You can now log in.", "success");
+        // Clean up URL
+        window.history.replaceState({}, document.title, "/login");
+      } else if (verified === "error") {
+        showToast(message ? decodeURIComponent(message) : "❌ Email verification failed. Please try again.", "error");
+        // Clean up URL
+        window.history.replaceState({}, document.title, "/login");
+      }
     </script>
 
     <!-- ✅ Firebase Config (loads from external file, gitignored) -->

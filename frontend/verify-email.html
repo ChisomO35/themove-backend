@@ -79,8 +79,14 @@
       const urlParams = new URLSearchParams(window.location.search);
       const token = urlParams.get("token");
 
-      // Verify email with timeout
+      // Verify email and redirect to login
       async function verifyEmail() {
+        if (!token) {
+          // No token - redirect to login with error
+          window.location.href = "/login?verified=error&message=" + encodeURIComponent("No verification token provided.");
+          return;
+        }
+
         console.log(`🔍 [Frontend] Starting email verification for token: ${token.substring(0, 10)}...`);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
@@ -89,7 +95,8 @@
         }, 15000); // 15 second timeout
 
         try {
-          const url = `https://themove-backend-production.up.railway.app/auth/verify-email?token=${token}`;
+          const encodedToken = encodeURIComponent(token);
+          const url = `https://themove-backend-production.up.railway.app/auth/verify-email?token=${encodedToken}`;
           console.log(`📤 [Frontend] Sending request to: ${url}`);
           
           const res = await fetch(url, {
@@ -108,49 +115,41 @@
           if (!res.ok) {
             const errorText = await res.text();
             console.error(`❌ [Frontend] HTTP error! status: ${res.status}, body: ${errorText}`);
-            throw new Error(`HTTP error! status: ${res.status}`);
+            // Redirect to login with error
+            window.location.href = "/login?verified=error&message=" + encodeURIComponent("Verification failed. Please try again.");
+            return;
           }
 
           const data = await res.json();
           console.log(`✅ [Frontend] Response data:`, data);
 
-          document.getElementById("loading-state").classList.add("hidden");
-
           if (data.success) {
-            console.log(`✅ [Frontend] Verification successful!`);
-            document.getElementById("success-state").classList.remove("hidden");
+            console.log(`✅ [Frontend] Verification successful! Redirecting to login...`);
+            // Redirect to login with success
+            window.location.href = "/login?verified=success";
           } else {
             console.error(`❌ [Frontend] Verification failed:`, data.message);
-            document.getElementById("error-state").classList.remove("hidden");
-            document.getElementById("error-message").textContent = data.message || "Verification failed.";
+            // Redirect to login with error
+            window.location.href = "/login?verified=error&message=" + encodeURIComponent(data.message || "Verification failed.");
           }
         } catch (err) {
           clearTimeout(timeoutId);
           console.error("❌ [Frontend] Verification error:", err);
-          console.error("❌ [Frontend] Error name:", err.name);
-          console.error("❌ [Frontend] Error message:", err.message);
           
-          document.getElementById("loading-state").classList.add("hidden");
-          document.getElementById("error-state").classList.remove("hidden");
-          
+          let errorMessage = "Verification failed. Please try again.";
           if (err.name === 'AbortError') {
-            document.getElementById("error-message").textContent = "Request timed out. Please check your connection and try again.";
+            errorMessage = "Request timed out. Please check your connection and try again.";
           } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-            document.getElementById("error-message").textContent = "Network error. Please check your connection and try again.";
-          } else {
-            document.getElementById("error-message").textContent = `An error occurred: ${err.message}. Please try again or contact support.`;
+            errorMessage = "Network error. Please check your connection and try again.";
           }
+          
+          // Redirect to login with error
+          window.location.href = "/login?verified=error&message=" + encodeURIComponent(errorMessage);
         }
       }
 
-      // Only call verifyEmail if we have a token, otherwise show error immediately
-      if (!token) {
-        document.getElementById("loading-state").classList.add("hidden");
-        document.getElementById("error-state").classList.remove("hidden");
-        document.getElementById("error-message").textContent = "No verification token provided.";
-      } else {
-        verifyEmail();
-      }
+      // Automatically verify and redirect
+      verifyEmail();
     </script>
   </body>
 </html>
