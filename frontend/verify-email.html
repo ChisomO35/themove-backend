@@ -55,7 +55,7 @@
               <h1 class="heading-2 mb-2">Email Verified!</h1>
               <p class="text-muted">Your email has been successfully verified.</p>
             </div>
-            <a href="/login" class="btn btn-primary btn-full">Continue to Login</a>
+            <a href="/login" class="btn btn-primary btn-full" onclick="localStorage.removeItem('emailVerified')">Continue to Login</a>
           </div>
 
           <div id="error-state" class="hidden">
@@ -68,20 +68,32 @@
               <h1 class="heading-2 mb-2">Verification Failed</h1>
               <p class="text-muted mb-4" id="error-message">The verification link is invalid or has expired.</p>
             </div>
-            <a href="/login" class="btn btn-secondary btn-full">Back to Login</a>
+            <a href="/login" class="btn btn-secondary btn-full" onclick="localStorage.removeItem('emailVerified')">Back to Login</a>
           </div>
         </div>
       </div>
     </main>
 
     <script type="module">
-      // Prevent multiple verification calls
-      let verificationInProgress = false;
-      let verificationCompleted = false;
+      // FIX #1: Remove token from URL immediately (prevents browser prefetching/reloading same link)
+      if (window.location.search.includes("token=")) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
 
-      // Get token from URL
-      const urlParams = new URLSearchParams(window.location.search);
-      const token = urlParams.get("token");
+      // FIX #3: Check if already verified (idempotent client-side check)
+      if (localStorage.getItem("emailVerified") === "true") {
+        // Already verified - show success immediately
+        document.getElementById("loading-state").classList.add("hidden");
+        document.getElementById("success-state").classList.remove("hidden");
+        // Don't call verifyEmail() again
+      } else {
+        // Prevent multiple verification calls
+        let verificationInProgress = false;
+        let verificationCompleted = false;
+
+        // Get token from URL (before we removed it)
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get("token") || new URLSearchParams(window.location.hash.substring(1)).get("token");
 
       // Verify email and redirect to login
       async function verifyEmail() {
@@ -135,15 +147,23 @@
           console.log(`✅ [Frontend] Response data:`, data);
 
           if (data.success) {
-            console.log(`✅ [Frontend] Verification successful! Redirecting to login...`);
+            console.log(`✅ [Frontend] Verification successful!`);
             verificationCompleted = true;
-            // Redirect to login with success (only once)
-            window.location.href = "/login?verified=success";
+            
+            // FIX #3: Mark as verified in localStorage (idempotent)
+            localStorage.setItem("emailVerified", "true");
+            
+            // FIX #1: Show success state instead of immediate redirect (prevents browser prefetch)
+            document.getElementById("loading-state").classList.add("hidden");
+            document.getElementById("success-state").classList.remove("hidden");
           } else {
             console.error(`❌ [Frontend] Verification failed:`, data.message);
             verificationCompleted = true;
-            // Redirect to login with error (only once)
-            window.location.href = "/login?verified=error&message=" + encodeURIComponent(data.message || "Verification failed.");
+            
+            // FIX #1: Show error state instead of immediate redirect
+            document.getElementById("loading-state").classList.add("hidden");
+            document.getElementById("error-state").classList.remove("hidden");
+            document.getElementById("error-message").textContent = data.message || "Verification failed.";
           }
         } catch (err) {
           clearTimeout(timeoutId);
@@ -156,20 +176,25 @@
             errorMessage = "Network error. Please check your connection and try again.";
           }
           
-          // Redirect to login with error (only once)
+          // FIX #1: Show error state instead of immediate redirect
           verificationCompleted = true;
-          window.location.href = "/login?verified=error&message=" + encodeURIComponent(errorMessage);
+          document.getElementById("loading-state").classList.add("hidden");
+          document.getElementById("error-state").classList.remove("hidden");
+          document.getElementById("error-message").textContent = errorMessage;
         } finally {
           verificationInProgress = false;
         }
       }
 
-      // Automatically verify and redirect (only once)
+      // Automatically verify (only once)
       if (token) {
         verifyEmail();
       } else {
-        // No token - redirect immediately
-        window.location.href = "/login?verified=error&message=" + encodeURIComponent("No verification token provided.");
+        // No token - show error state
+        document.getElementById("loading-state").classList.add("hidden");
+        document.getElementById("error-state").classList.remove("hidden");
+        document.getElementById("error-message").textContent = "No verification token provided.";
+      }
       }
     </script>
   </body>
