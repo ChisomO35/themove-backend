@@ -1546,6 +1546,12 @@ app.get("/auth/verify-email", async (req, res) => {
   console.log(`📧 [Verify Email] Request received from origin: ${req.headers.origin}`);
   console.log(`📧 [Verify Email] Token: ${req.query.token ? 'present' : 'missing'}`);
   
+  // ✅ FIX #2: Set headers to prevent browser prefetching and caching
+  res.setHeader("X-DNS-Prefetch-Control", "off");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  
   // Set CORS headers immediately
   const origin = req.headers.origin;
   if (origin && (origin.includes('usethemove.com') || origin.includes('localhost'))) {

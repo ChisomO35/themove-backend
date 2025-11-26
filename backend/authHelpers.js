@@ -191,6 +191,35 @@ async function verifyEmailToken(token) {
 
     // Try to decode URL encoding if present (some email clients/browsers encode URLs)
     let normalizedToken = token.trim();
+    
+    // ✅ FIX #1: Check verification log FIRST before doing anything else
+    // This makes the endpoint idempotent - if token was recently verified, return success immediately
+    try {
+      const recentLog = await db.collection("emailVerificationLog").doc(normalizedToken).get();
+      if (recentLog.exists) {
+        const logData = recentLog.data();
+        // Check if log is still valid (not expired)
+        if (Date.now() < logData.expiresAt) {
+          // Token was recently verified - check if email is still verified
+          try {
+            const user = await admin.auth().getUser(logData.uid);
+            if (user && user.emailVerified) {
+              console.log(`✅ [verifyEmailToken] Token found in verification log - email is already verified!`);
+              return { success: true, message: "Email already verified" };
+            }
+          } catch (userError) {
+            console.warn(`⚠️ [verifyEmailToken] Could not check user from log:`, userError.message);
+            // Continue to normal flow
+          }
+        } else {
+          // Log expired, clean it up
+          await db.collection("emailVerificationLog").doc(normalizedToken).delete();
+        }
+      }
+    } catch (logError) {
+      console.warn(`⚠️ [verifyEmailToken] Error checking verification log:`, logError.message);
+      // Continue to normal flow
+    }
     try {
       // Try decoding - if it's already decoded, decodeURIComponent will throw or return same value
       const decoded = decodeURIComponent(normalizedToken);
@@ -308,38 +337,10 @@ async function verifyEmailToken(token) {
             console.warn(`⚠️ [verifyEmailToken] Could not check user status:`, userError.message);
           }
         } else {
-          // Token not found - might have been deleted after successful verification
-          // ✅ FIX: Check verification log to see if this token was recently used
+          // Token not found - verification log was already checked at the start
+          // If we get here, the token truly doesn't exist and wasn't recently verified
           console.log(`❌ [verifyEmailToken] Token not found even with fallback matching`);
-          console.log(`🔍 [verifyEmailToken] Checking verification log for recently verified token...`);
-          
-          try {
-            const logDoc = await db.collection("emailVerificationLog").doc(normalizedToken).get();
-            
-            if (logDoc.exists) {
-              const logData = logDoc.data();
-              // Check if log is still valid (not expired)
-              if (Date.now() < logData.expiresAt) {
-                // Token was recently used - check if email is still verified
-                try {
-                  const user = await admin.auth().getUser(logData.uid);
-                  if (user && user.emailVerified) {
-                    console.log(`✅ [verifyEmailToken] Found token in verification log - email is verified!`);
-                    return { success: true, message: "Email already verified" };
-                  }
-                } catch (userError) {
-                  console.warn(`⚠️ [verifyEmailToken] Could not check user from log:`, userError.message);
-                }
-              } else {
-                // Log expired, clean it up
-                await db.collection("emailVerificationLog").doc(normalizedToken).delete();
-              }
-            }
-          } catch (logError) {
-            console.warn(`⚠️ [verifyEmailToken] Error checking verification log:`, logError.message);
-          }
-          
-          console.log(`⚠️ [verifyEmailToken] Token not found in log either. Returning error.`);
+          console.log(`⚠️ [verifyEmailToken] Token not found in storage or verification log. Returning error.`);
           return { success: false, message: "Invalid or expired verification token. If you already verified your email, try logging in. Otherwise, please request a new verification email." };
         }
       } catch (queryError) {
@@ -358,32 +359,34 @@ async function verifyEmailToken(token) {
       return { success: false, message: "Verification token expired" };
     }
 
-    // ✅ FIX: Check if user exists before trying to verify
+    // ✅ FIX #3: Check if user exists and if email is already verified BEFORE doing anything else
+    // This makes the endpoint idempotent
     let user;
     try {
       user = await admin.auth().getUser(stored.uid);
+      
+      // ✅ FIX #3: If email is already verified, return success immediately (idempotent)
+      if (user.emailVerified) {
+        console.log(`✅ [verifyEmailToken] Email already verified for user ${stored.uid}`);
+        // Store in verification log before deleting token
+        try {
+          await db.collection("emailVerificationLog").doc(actualTokenId).set({
+            uid: stored.uid,
+            email: stored.email,
+            verifiedAt: Date.now(),
+            expiresAt: Date.now() + (60 * 60 * 1000), // 1 hour
+          });
+        } catch (logError) {
+          console.warn("⚠️ [verifyEmailToken] Could not create verification log:", logError.message);
+        }
+        await db.collection("emailVerificationTokens").doc(actualTokenId).delete();
+        return { success: true, message: "Email already verified" };
+      }
     } catch (userError) {
       // User doesn't exist (was deleted) - delete the stale token
       console.warn(`⚠️ [verifyEmailToken] User ${stored.uid} does not exist (likely deleted). Deleting stale token.`);
       await db.collection("emailVerificationTokens").doc(actualTokenId).delete();
       return { success: false, message: "Invalid or expired verification token. Please request a new verification email." };
-    }
-
-    // User exists - check if already verified
-    if (user.emailVerified) {
-      // ✅ FIX: Store in verification log before deleting token
-      try {
-        await db.collection("emailVerificationLog").doc(actualTokenId).set({
-          uid: stored.uid,
-          email: stored.email,
-          verifiedAt: Date.now(),
-          expiresAt: Date.now() + (60 * 60 * 1000), // 1 hour
-        });
-      } catch (logError) {
-        console.warn("⚠️ [verifyEmailToken] Could not create verification log:", logError.message);
-      }
-      await db.collection("emailVerificationTokens").doc(actualTokenId).delete();
-      return { success: true, message: "Email already verified" };
     }
 
     // Verify the email
