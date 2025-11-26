@@ -7,7 +7,7 @@ const mailgun = require("mailgun-js");
 
 // Email configuration
 // Using postmaster@usethemove.com as shown in Mailgun working example
-const FROM_EMAIL = process.env.FROM_EMAIL || "postmaster@usethemove.com";
+const FROM_EMAIL = process.env.FROM_EMAIL || "support@usethemove.com";
 const FROM_NAME = process.env.FROM_NAME || "TheMove";
 const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY;
 const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN;
