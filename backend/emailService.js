@@ -11,22 +11,28 @@ const FROM_NAME = process.env.FROM_NAME || "TheMove";
 const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
 
 // Create transporter with Office365 SMTP
-const transporter = nodemailer.createTransport({
+// Try port 465 first (SSL), fallback to 587 (TLS) if needed
+const smtpConfig = {
   host: "smtp.office365.com",
-  port: 587,
-  secure: false, // TLS required but secure:false for STARTTLS
   auth: {
     user: FROM_EMAIL, // support@usethemove.com
     pass: EMAIL_PASSWORD, // from GoDaddy/MS365
   },
+  connectionTimeout: 15000, // 15 seconds
+  greetingTimeout: 15000, // 15 seconds
+  socketTimeout: 15000, // 15 seconds
+  // Try port 465 with SSL first (often less blocked than 587)
+  port: 465,
+  secure: true, // true for 465, false for other ports
+  requireTLS: false, // Not needed for SSL
   tls: {
-    ciphers: "SSLv3",
-    rejectUnauthorized: false, // Allow self-signed certificates if needed
+    ciphers: 'SSLv3',
+    rejectUnauthorized: false,
   },
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000, // 10 seconds
-  socketTimeout: 10000, // 10 seconds
-});
+};
+
+// If port 465 doesn't work, we can try 587 as fallback
+const transporter = nodemailer.createTransport(smtpConfig);
 
 // Verify transporter configuration on startup (non-blocking, with timeout)
 // Don't block server startup if email verification fails
