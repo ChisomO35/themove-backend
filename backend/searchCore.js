@@ -918,8 +918,8 @@ async function searchPostersForSMS(query, school) {
       }
     }
     
-    // Shortened URL - no emoji, no https://
-    msg += `${shortUrl}/poster/${match.id}`;
+    // Descriptive text with URL - carriers will make URL clickable
+    msg += `View Poster: ${shortUrl}/poster/${match.id}`;
     
     // Single line break between results
     if (i < topResults.length - 1) {
