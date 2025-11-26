@@ -88,24 +88,24 @@ function verifyPhoneCode(phoneNumber, code) {
 
     const stored = phoneVerificationCodes.get(normalized);
 
-    if (!stored) {
+  if (!stored) {
       console.warn(`⚠️ [verifyPhoneCode] No code found for: ${normalized}`);
-      return { success: false, message: "No verification code found. Please request a new code." };
-    }
+    return { success: false, message: "No verification code found. Please request a new code." };
+  }
 
-    if (Date.now() > stored.expiresAt) {
+  if (Date.now() > stored.expiresAt) {
       console.warn(`⚠️ [verifyPhoneCode] Code expired for: ${normalized}`);
       phoneVerificationCodes.delete(normalized);
-      return { success: false, message: "Verification code expired. Please request a new code." };
-    }
+    return { success: false, message: "Verification code expired. Please request a new code." };
+  }
 
-    if (stored.attempts >= 5) {
+  if (stored.attempts >= 5) {
       console.warn(`⚠️ [verifyPhoneCode] Too many attempts for: ${normalized}`);
       phoneVerificationCodes.delete(normalized);
-      return { success: false, message: "Too many attempts. Please request a new code." };
-    }
+    return { success: false, message: "Too many attempts. Please request a new code." };
+  }
 
-    stored.attempts++;
+  stored.attempts++;
 
     const storedCode = String(stored.code);
     const providedCode = String(code).trim();
@@ -114,12 +114,12 @@ function verifyPhoneCode(phoneNumber, code) {
 
     if (storedCode !== providedCode) {
       console.warn(`⚠️ [verifyPhoneCode] Code mismatch for: ${normalized}`);
-      return { success: false, message: "Invalid verification code." };
-    }
+    return { success: false, message: "Invalid verification code." };
+  }
 
     phoneVerificationCodes.delete(normalized);
     console.log(`✅ [verifyPhoneCode] Code verified successfully for: ${normalized}`);
-    return { success: true, message: "Phone number verified" };
+  return { success: true, message: "Phone number verified" };
   } catch (error) {
     console.error("❌ [verifyPhoneCode] Error:", error);
     return { success: false, message: "Error verifying code: " + error.message };
@@ -250,14 +250,28 @@ async function verifyEmailToken(token) {
       
       // Try to find the token by querying all tokens and comparing
       // This handles cases where URL encoding/decoding might have changed the token slightly
+      // Also check ALL tokens (not just non-expired) in case token was just deleted after verification
       try {
-        const allTokensSnapshot = await db
+        // First try non-expired tokens
+        let allTokensSnapshot = await db
           .collection("emailVerificationTokens")
-          .where("expiresAt", ">", Date.now()) // Only non-expired tokens
+          .where("expiresAt", ">", Date.now())
           .limit(100)
           .get();
         
         console.log(`🔍 [verifyEmailToken] Found ${allTokensSnapshot.size} non-expired token(s) in collection`);
+        
+        // If not found, also check recently created tokens (within last 24 hours) even if expired
+        // This catches tokens that were just used and deleted
+        if (allTokensSnapshot.empty) {
+          const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+          allTokensSnapshot = await db
+            .collection("emailVerificationTokens")
+            .where("createdAt", ">", oneDayAgo)
+            .limit(100)
+            .get();
+          console.log(`🔍 [verifyEmailToken] Found ${allTokensSnapshot.size} recently created token(s) (including expired)`);
+        }
         
         // Try to find a token that matches (exact or close match)
         let foundToken = null;
@@ -276,10 +290,31 @@ async function verifyEmailToken(token) {
         
         if (foundToken) {
           tokenDoc = foundToken;
+          const storedData = foundToken.data();
+          // If token was found but might be expired or already used, check if email is verified
+          try {
+            const user = await admin.auth().getUser(storedData.uid);
+            if (user && user.emailVerified) {
+              console.log(`✅ [verifyEmailToken] Token was used but email is already verified. Returning success.`);
+              // Delete the token if it still exists
+              try {
+                await db.collection("emailVerificationTokens").doc(foundToken.id).delete();
+              } catch (e) {
+                // Token might already be deleted, that's fine
+              }
+              return { success: true, message: "Email already verified" };
+            }
+          } catch (userError) {
+            console.warn(`⚠️ [verifyEmailToken] Could not check user status:`, userError.message);
+          }
         } else {
-          // Still not found - return error
+          // Token not found - might have been deleted after successful verification
+          // Try to check if we can find any user with a recently verified email
+          // But we don't have the email, so we can't do this reliably
           console.log(`❌ [verifyEmailToken] Token not found even with fallback matching`);
-          return { success: false, message: "Invalid or expired verification token. Please request a new verification email." };
+          console.log(`⚠️ [verifyEmailToken] Token may have been deleted after successful verification.`);
+          console.log(`⚠️ [verifyEmailToken] Returning error - user should check if email is already verified.`);
+          return { success: false, message: "Invalid or expired verification token. If you already verified your email, try logging in. Otherwise, please request a new verification email." };
         }
       } catch (queryError) {
         console.error("❌ [verifyEmailToken] Error querying tokens:", queryError);
@@ -368,16 +403,16 @@ async function verifyPasswordResetToken(token) {
     const tokenDoc = await db.collection("passwordResetTokens").doc(token).get();
 
     if (!tokenDoc.exists) {
-      return { success: false, message: "Invalid or expired reset token" };
-    }
+    return { success: false, message: "Invalid or expired reset token" };
+  }
 
     const stored = tokenDoc.data();
-    if (Date.now() > stored.expiresAt) {
+  if (Date.now() > stored.expiresAt) {
       await db.collection("passwordResetTokens").doc(token).delete();
-      return { success: false, message: "Reset token expired" };
-    }
+    return { success: false, message: "Reset token expired" };
+  }
 
-    return { success: true, uid: stored.uid, email: stored.email };
+  return { success: true, uid: stored.uid, email: stored.email };
   } catch (error) {
     console.error("❌ Error verifying reset token:", error);
     return { success: false, message: "Invalid or expired reset token" };

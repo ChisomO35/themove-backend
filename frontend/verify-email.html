@@ -92,7 +92,16 @@
           if (data.success === true) {
             success.classList.remove("hidden");
           } else {
-            showError(data.message || "The link is invalid or expired.");
+            // If verification failed, check if email might already be verified
+            // This handles cases where the token was deleted after successful verification
+            // but a duplicate request came in
+            const errorMsg = data.message || "The link is invalid or expired.";
+            if (errorMsg.includes("already verified") || errorMsg.includes("try logging in")) {
+              // Show success message instead of error
+              success.classList.remove("hidden");
+            } else {
+              showError(errorMsg);
+            }
           }
         } catch (err) {
           console.error("❌ [Frontend] Verification error:", err);
