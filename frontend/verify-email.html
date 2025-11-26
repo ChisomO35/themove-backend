@@ -72,17 +72,44 @@
       const params = new URLSearchParams(window.location.search);
       const token = params.get("token");
 
+      // ✅ FIX: Prevent duplicate verification calls
+      // Use localStorage to persist across page reloads/navigation
+      const verificationKey = `verification_attempted_${token}`;
+      const alreadyAttempted = localStorage.getItem(verificationKey);
+      const alreadyCompleted = localStorage.getItem(`verification_completed_${token}`);
+
+      // If already completed, show success immediately
+      if (alreadyCompleted === "true") {
+        loading.classList.add("hidden");
+        success.classList.remove("hidden");
+        // Don't run start() again
+      } else {
+        // Only run if not already attempted
+        if (!alreadyAttempted) {
+          start();
+        } else {
+          // Already attempted but not completed - show loading and wait
+          console.log("⏳ [Frontend] Verification already in progress, waiting...");
+        }
+      }
+
       async function start() {
+        // ✅ FIX: Mark as attempted immediately to prevent duplicate calls
+        localStorage.setItem(verificationKey, "true");
+
         if (!token) {
           showError("No verification token provided.");
           return;
         }
 
         try {
-          // Verify the email token
+          // Verify the email token with cache disabled
           const res = await fetch(
             `https://themove-backend-production.up.railway.app/auth/verify-email?token=${token}`,
-            { method: "GET" }
+            { 
+              method: "GET",
+              cache: "no-store" // ✅ FIX: Prevent browser caching
+            }
           );
 
           const data = await res.json();
@@ -90,14 +117,15 @@
           loading.classList.add("hidden");
 
           if (data.success === true) {
+            // ✅ FIX: Mark as completed to prevent re-verification on page reload
+            localStorage.setItem(`verification_completed_${token}`, "true");
             success.classList.remove("hidden");
           } else {
             // If verification failed, check if email might already be verified
-            // This handles cases where the token was deleted after successful verification
-            // but a duplicate request came in
             const errorMsg = data.message || "The link is invalid or expired.";
             if (errorMsg.includes("already verified") || errorMsg.includes("try logging in")) {
               // Show success message instead of error
+              localStorage.setItem(`verification_completed_${token}`, "true");
               success.classList.remove("hidden");
             } else {
               showError(errorMsg);
@@ -114,8 +142,6 @@
         error.classList.remove("hidden");
         errorMsg.textContent = msg;
       }
-
-      start();
     </script>
   </body>
 </html>
