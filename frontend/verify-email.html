@@ -90,119 +90,120 @@
         document.getElementById("loading-state").classList.add("hidden");
         document.getElementById("success-state").classList.remove("hidden");
         // Don't call verifyEmail() again
+        console.log("🔁 Email already verified — skipping API call");
+        return;
       } else {
         // Prevent multiple verification calls
         let verificationInProgress = false;
         let verificationCompleted = false;
 
-      // Verify email and redirect to login
-      async function verifyEmail() {
-        // Prevent duplicate calls
-        if (verificationInProgress || verificationCompleted) {
-          console.log("⚠️ [Frontend] Verification already in progress or completed, skipping duplicate call");
-          return;
-        }
-        
-        verificationInProgress = true;
-        if (!token) {
-          // No token - show error state
-          verificationCompleted = true;
-          document.getElementById("loading-state").classList.add("hidden");
-          document.getElementById("error-state").classList.remove("hidden");
-          document.getElementById("error-message").textContent = "No verification token provided.";
-          return;
-        }
-
-        console.log(`🔍 [Frontend] Starting email verification for token: ${token.substring(0, 10)}...`);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          console.error(`⏱️ [Frontend] Verification request timed out`);
-          controller.abort();
-        }, 15000); // 15 second timeout
-
-        try {
-          // No need to encode - base64url tokens are already URL-safe
-          const url = `https://themove-backend-production.up.railway.app/auth/verify-email?token=${token}`;
-          console.log(`📤 [Frontend] Sending request to: ${url}`);
+        // Verify email and redirect to login
+        async function verifyEmail() {
+          // Prevent duplicate calls
+          if (verificationInProgress || verificationCompleted) {
+            console.log("⚠️ [Frontend] Verification already in progress or completed, skipping duplicate call");
+            return;
+          }
           
-          const res = await fetch(url, {
-            signal: controller.signal,
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            mode: 'cors',
-            credentials: 'include'
-          });
-
-          clearTimeout(timeoutId);
-          console.log(`📥 [Frontend] Response received, status: ${res.status}`);
-
-          if (!res.ok) {
-            const errorText = await res.text();
-            console.error(`❌ [Frontend] HTTP error! status: ${res.status}, body: ${errorText}`);
-            // FIX #1: Show error state instead of immediate redirect
+          verificationInProgress = true;
+          if (!token) {
+            // No token - show error state
             verificationCompleted = true;
             document.getElementById("loading-state").classList.add("hidden");
             document.getElementById("error-state").classList.remove("hidden");
-            document.getElementById("error-message").textContent = "Verification failed. Please try again.";
+            document.getElementById("error-message").textContent = "No verification token provided.";
             return;
           }
 
-          const data = await res.json();
-          console.log(`✅ [Frontend] Response data:`, data);
+          console.log(`🔍 [Frontend] Starting email verification for token: ${token.substring(0, 10)}...`);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => {
+            console.error(`⏱️ [Frontend] Verification request timed out`);
+            controller.abort();
+          }, 15000); // 15 second timeout
 
-          if (data.success) {
-            console.log(`✅ [Frontend] Verification successful!`);
-            verificationCompleted = true;
+          try {
+            // No need to encode - base64url tokens are already URL-safe
+            const url = `https://themove-backend-production.up.railway.app/auth/verify-email?token=${token}`;
+            console.log(`📤 [Frontend] Sending request to: ${url}`);
             
-            // FIX #3: Mark as verified in localStorage (idempotent)
-            localStorage.setItem("emailVerified", "true");
+            const res = await fetch(url, {
+              signal: controller.signal,
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              mode: 'cors',
+              credentials: 'include'
+            });
+
+            clearTimeout(timeoutId);
+            console.log(`📥 [Frontend] Response received, status: ${res.status}`);
+
+            if (!res.ok) {
+              const errorText = await res.text();
+              console.error(`❌ [Frontend] HTTP error! status: ${res.status}, body: ${errorText}`);
+              // FIX #1: Show error state instead of immediate redirect
+              verificationCompleted = true;
+              document.getElementById("loading-state").classList.add("hidden");
+              document.getElementById("error-state").classList.remove("hidden");
+              document.getElementById("error-message").textContent = "Verification failed. Please try again.";
+              return;
+            }
+
+            const data = await res.json();
+            console.log(`✅ [Frontend] Response data:`, data);
+
+            if (data.success) {
+              console.log(`✅ [Frontend] Verification successful!`);
+              verificationCompleted = true;
+              
+              // FIX #3: Mark as verified in localStorage (idempotent)
+              localStorage.setItem("emailVerified", "true");
+              
+              // FIX #1: Show success state instead of immediate redirect (prevents browser prefetch)
+              document.getElementById("loading-state").classList.add("hidden");
+              document.getElementById("success-state").classList.remove("hidden");
+            } else {
+              console.error(`❌ [Frontend] Verification failed:`, data.message);
+              verificationCompleted = true;
+              
+              // FIX #1: Show error state instead of immediate redirect
+              document.getElementById("loading-state").classList.add("hidden");
+              document.getElementById("error-state").classList.remove("hidden");
+              document.getElementById("error-message").textContent = data.message || "Verification failed.";
+            }
+          } catch (err) {
+            clearTimeout(timeoutId);
+            console.error("❌ [Frontend] Verification error:", err);
             
-            // FIX #1: Show success state instead of immediate redirect (prevents browser prefetch)
-            document.getElementById("loading-state").classList.add("hidden");
-            document.getElementById("success-state").classList.remove("hidden");
-          } else {
-            console.error(`❌ [Frontend] Verification failed:`, data.message);
-            verificationCompleted = true;
+            let errorMessage = "Verification failed. Please try again.";
+            if (err.name === 'AbortError') {
+              errorMessage = "Request timed out. Please check your connection and try again.";
+            } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+              errorMessage = "Network error. Please check your connection and try again.";
+            }
             
             // FIX #1: Show error state instead of immediate redirect
+            verificationCompleted = true;
             document.getElementById("loading-state").classList.add("hidden");
             document.getElementById("error-state").classList.remove("hidden");
-            document.getElementById("error-message").textContent = data.message || "Verification failed.";
+            document.getElementById("error-message").textContent = errorMessage;
+          } finally {
+            verificationInProgress = false;
           }
-        } catch (err) {
-          clearTimeout(timeoutId);
-          console.error("❌ [Frontend] Verification error:", err);
-          
-          let errorMessage = "Verification failed. Please try again.";
-          if (err.name === 'AbortError') {
-            errorMessage = "Request timed out. Please check your connection and try again.";
-          } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-            errorMessage = "Network error. Please check your connection and try again.";
-          }
-          
-          // FIX #1: Show error state instead of immediate redirect
-          verificationCompleted = true;
+        }
+
+        // Automatically verify (only once)
+        if (token) {
+          verifyEmail();
+        } else {
+          // No token - show error state
           document.getElementById("loading-state").classList.add("hidden");
           document.getElementById("error-state").classList.remove("hidden");
-          document.getElementById("error-message").textContent = errorMessage;
-        } finally {
-          verificationInProgress = false;
+          document.getElementById("error-message").textContent = "No verification token provided.";
         }
-      }
-
-      // Automatically verify (only once)
-      if (token) {
-        verifyEmail();
-      } else {
-        // No token - show error state
-        document.getElementById("loading-state").classList.add("hidden");
-        document.getElementById("error-state").classList.remove("hidden");
-        document.getElementById("error-message").textContent = "No verification token provided.";
-      }
       }
     </script>
   </body>
 </html>
-
