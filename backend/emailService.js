@@ -1,6 +1,7 @@
 // emailService.js
 // Email service using Nodemailer with Office365 SMTP
 // Install: npm install nodemailer
+// Updated: Using Nodemailer instead of Resend
 
 const nodemailer = require("nodemailer");
 
