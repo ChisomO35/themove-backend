@@ -75,8 +75,12 @@
     </main>
 
     <script type="module">
+      // Get token from URL FIRST (before we remove it)
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get("token");
+
       // FIX #1: Remove token from URL immediately (prevents browser prefetching/reloading same link)
-      if (window.location.search.includes("token=")) {
+      if (token) {
         window.history.replaceState({}, document.title, window.location.pathname);
       }
 
@@ -91,10 +95,6 @@
         let verificationInProgress = false;
         let verificationCompleted = false;
 
-        // Get token from URL (before we removed it)
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get("token") || new URLSearchParams(window.location.hash.substring(1)).get("token");
-
       // Verify email and redirect to login
       async function verifyEmail() {
         // Prevent duplicate calls
@@ -105,8 +105,11 @@
         
         verificationInProgress = true;
         if (!token) {
-          // No token - redirect to login with error
-          window.location.href = "/login?verified=error&message=" + encodeURIComponent("No verification token provided.");
+          // No token - show error state
+          verificationCompleted = true;
+          document.getElementById("loading-state").classList.add("hidden");
+          document.getElementById("error-state").classList.remove("hidden");
+          document.getElementById("error-message").textContent = "No verification token provided.";
           return;
         }
 
@@ -138,8 +141,11 @@
           if (!res.ok) {
             const errorText = await res.text();
             console.error(`❌ [Frontend] HTTP error! status: ${res.status}, body: ${errorText}`);
-            // Redirect to login with error
-            window.location.href = "/login?verified=error&message=" + encodeURIComponent("Verification failed. Please try again.");
+            // FIX #1: Show error state instead of immediate redirect
+            verificationCompleted = true;
+            document.getElementById("loading-state").classList.add("hidden");
+            document.getElementById("error-state").classList.remove("hidden");
+            document.getElementById("error-message").textContent = "Verification failed. Please try again.";
             return;
           }
 
