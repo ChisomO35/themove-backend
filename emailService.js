@@ -23,12 +23,16 @@ const transporter = nodemailer.createTransport({
     ciphers: "SSLv3",
     rejectUnauthorized: false, // Allow self-signed certificates if needed
   },
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000, // 10 seconds
+  socketTimeout: 10000, // 10 seconds
 });
 
-// Verify transporter configuration on startup
+// Verify transporter configuration on startup (non-blocking)
 transporter.verify(function (error, success) {
   if (error) {
-    console.error("❌ Email transporter verification failed:", error);
+    console.error("❌ Email transporter verification failed:", error.message);
+    console.error("⚠️ Email sending may fail. Check EMAIL_PASSWORD and SMTP settings.");
   } else {
     console.log("✅ Email transporter is ready to send emails");
   }
@@ -71,6 +75,12 @@ async function sendVerificationEmail(email, verificationUrl) {
   `;
 
   try {
+    // Check if EMAIL_PASSWORD is set
+    if (!EMAIL_PASSWORD) {
+      console.error("❌ EMAIL_PASSWORD environment variable is not set");
+      throw new Error("Email service not configured: EMAIL_PASSWORD missing");
+    }
+
     const mailOptions = {
       from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
       to: email,
@@ -84,11 +94,18 @@ async function sendVerificationEmail(email, verificationUrl) {
       },
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    // Add timeout to email sending (30 seconds max)
+    const sendPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
+    );
+
+    const info = await Promise.race([sendPromise, timeoutPromise]);
     console.log(`✅ Verification email sent to ${email}, messageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error("❌ Error sending verification email:", error);
+    console.error("❌ Error details:", error.message);
     throw error;
   }
 }
@@ -130,6 +147,12 @@ async function sendPasswordResetEmail(email, resetUrl) {
   `;
 
   try {
+    // Check if EMAIL_PASSWORD is set
+    if (!EMAIL_PASSWORD) {
+      console.error("❌ EMAIL_PASSWORD environment variable is not set");
+      throw new Error("Email service not configured: EMAIL_PASSWORD missing");
+    }
+
     const mailOptions = {
       from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
       to: email,
@@ -143,11 +166,18 @@ async function sendPasswordResetEmail(email, resetUrl) {
       },
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    // Add timeout to email sending (30 seconds max)
+    const sendPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Email send timeout after 30 seconds")), 30000)
+    );
+
+    const info = await Promise.race([sendPromise, timeoutPromise]);
     console.log(`✅ Password reset email sent to ${email}, messageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error("❌ Error sending password reset email:", error);
+    console.error("❌ Error details:", error.message);
     throw error;
   }
 }
