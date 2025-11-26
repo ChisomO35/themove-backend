@@ -75,12 +75,23 @@
     </main>
 
     <script type="module">
+      // Prevent multiple verification calls
+      let verificationInProgress = false;
+      let verificationCompleted = false;
+
       // Get token from URL
       const urlParams = new URLSearchParams(window.location.search);
       const token = urlParams.get("token");
 
       // Verify email and redirect to login
       async function verifyEmail() {
+        // Prevent duplicate calls
+        if (verificationInProgress || verificationCompleted) {
+          console.log("⚠️ [Frontend] Verification already in progress or completed, skipping duplicate call");
+          return;
+        }
+        
+        verificationInProgress = true;
         if (!token) {
           // No token - redirect to login with error
           window.location.href = "/login?verified=error&message=" + encodeURIComponent("No verification token provided.");
@@ -125,11 +136,13 @@
 
           if (data.success) {
             console.log(`✅ [Frontend] Verification successful! Redirecting to login...`);
-            // Redirect to login with success
+            verificationCompleted = true;
+            // Redirect to login with success (only once)
             window.location.href = "/login?verified=success";
           } else {
             console.error(`❌ [Frontend] Verification failed:`, data.message);
-            // Redirect to login with error
+            verificationCompleted = true;
+            // Redirect to login with error (only once)
             window.location.href = "/login?verified=error&message=" + encodeURIComponent(data.message || "Verification failed.");
           }
         } catch (err) {
@@ -143,13 +156,21 @@
             errorMessage = "Network error. Please check your connection and try again.";
           }
           
-          // Redirect to login with error
+          // Redirect to login with error (only once)
+          verificationCompleted = true;
           window.location.href = "/login?verified=error&message=" + encodeURIComponent(errorMessage);
+        } finally {
+          verificationInProgress = false;
         }
       }
 
-      // Automatically verify and redirect
-      verifyEmail();
+      // Automatically verify and redirect (only once)
+      if (token) {
+        verifyEmail();
+      } else {
+        // No token - redirect immediately
+        window.location.href = "/login?verified=error&message=" + encodeURIComponent("No verification token provided.");
+      }
     </script>
   </body>
 </html>
