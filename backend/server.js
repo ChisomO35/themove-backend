@@ -1035,6 +1035,40 @@ app.get("/poster/:id", async (req, res) => {
   }
 });
 
+// ✅ Short URL route for SMS: /p/XXXX redirects to /poster/FullID
+// This allows SMS to use 4-char IDs instead of full 20-char IDs
+app.get("/p/:shortId", async (req, res) => {
+  try {
+    const shortId = req.params.shortId.toUpperCase();
+    
+    // Find poster that starts with this short ID (first 4 chars)
+    // Note: Firestore doesn't support prefix queries directly, so we use range query
+    const postersSnapshot = await db
+      .collection("posters")
+      .where("__name__", ">=", shortId)
+      .where("__name__", "<", shortId + "\uf8ff")
+      .limit(1)
+      .get();
+    
+    if (postersSnapshot.empty) {
+      // Fallback: try exact match in case shortId is actually the full ID
+      const doc = await db.collection("posters").doc(shortId).get();
+      if (doc.exists) {
+        return res.redirect(`/poster/${shortId}`);
+      }
+      return res.status(404).send("Poster not found.");
+    }
+    
+    const posterDoc = postersSnapshot.docs[0];
+    const fullId = posterDoc.id;
+    
+    // Redirect to full poster URL
+    res.redirect(`/poster/${fullId}`);
+  } catch (err) {
+    console.error("❌ Error fetching short poster URL:", err);
+    res.status(404).send("Poster not found.");
+  }
+});
 
 app.get("/getUser/:uid", async (req, res) => {
   try {
