@@ -1113,6 +1113,8 @@ app.post("/sms/inbound", async (req, res) => {
 app.post("/sms", async (req, res) => {
   const twiml = new MessagingResponse();
   const incoming = (req.body.Body || "").trim().toLowerCase();
+  const incomingRaw = (req.body.Body || "").trim(); // preserve original capitalization
+  const from = req.body.From || "unknown";
 
   // ⭐️ STOP / HELP already handled by /sms/inbound — swallow them here
   if (incoming === "stop" || incoming === "help") {
@@ -1124,24 +1126,174 @@ app.post("/sms", async (req, res) => {
   const timeout = setTimeout(() => {
     if (!responseSent && !res.headersSent) {
       responseSent = true;
-      console.error(`⏱️ SMS timeout for "${incoming}" from ${req.body.From || "unknown"}`);
+      console.error(`⏱️ SMS timeout for "${incomingRaw}" from ${from}`);
       const timeoutTwiml = new MessagingResponse();
       timeoutTwiml.message("Sorry, that took too long. Please try again!");
       res.type("text/xml").send(timeoutTwiml.toString());
     }
   }, 25000); // 25 second timeout (Twilio has 30s limit)
 
-  try {
-    const school = "UNC-Chapel Hill"; // hardcoded for now
-    const incomingRaw = (req.body.Body || "").trim(); // preserve original capitalization
+  // Helper function to detect school from message
+  function detectSchoolFromMessage(message) {
+    const activeSchools = (process.env.ACTIVE_SCHOOLS || "UNC-Chapel Hill").split(",").map(s => s.trim());
+    const lowerMessage = message.toLowerCase();
+    
+    // Check for school names
+    for (const school of activeSchools) {
+      const schoolLower = school.toLowerCase();
+      // Check if message contains school name or abbreviation
+      if (lowerMessage.includes(schoolLower) || 
+          (schoolLower.includes("unc") && (lowerMessage.includes("unc") || lowerMessage.includes("chapel hill")))) {
+        return school;
+      }
+    }
+    
+    // Check for numeric selection (e.g., "1" for first school)
+    const numMatch = message.match(/^(\d+)$/);
+    if (numMatch) {
+      const num = parseInt(numMatch[1], 10);
+      if (num >= 1 && num <= activeSchools.length) {
+        return activeSchools[num - 1];
+      }
+    }
+    
+    return null;
+  }
 
-    if (!incomingRaw) {
-      twiml.message("Tell me what you're looking for on campus 🙂");
-    } else {
-      const from = req.body.From || "unknown";
-      console.log(`📱 SMS received: "${incomingRaw}" from ${from}`);
+  // Helper function to handle search (shared for registered and non-registered)
+  async function handleSearch(query, school, twimlResponse) {
+    console.log(`🔍 [SMS Handler] Starting search for: "${query}" in ${school}`);
+    let reply = null;
+    const searchStartTime = Date.now();
+    let searchTimeoutId = null;
+    
+    try {
+      const searchPromise = searchPostersForSMS(query, school);
+      const timeoutPromise = new Promise((_, reject) => {
+        searchTimeoutId = setTimeout(() => {
+          console.error(`⏱️ [SMS Handler] Search timeout after 20s for: "${query}"`);
+          reject(new Error("Search timeout"));
+        }, 20000);
+      });
       
-      // ✅ Add timeout wrapper for intent detection (10s max)
+      reply = await Promise.race([searchPromise, timeoutPromise]);
+      
+      if (searchTimeoutId) {
+        clearTimeout(searchTimeoutId);
+        searchTimeoutId = null;
+      }
+      
+      const searchDuration = Date.now() - searchStartTime;
+      console.log(`✅ [SMS Handler] Search completed in ${searchDuration}ms, reply length: ${reply?.length || 0}`);
+      
+      if (!reply || typeof reply !== 'string') {
+        console.error("❌ [SMS Handler] Invalid reply from search:", reply);
+        reply = "Sorry, I couldn't find any events. Try asking in a different way!";
+      }
+    } catch (searchErr) {
+      if (searchTimeoutId) {
+        clearTimeout(searchTimeoutId);
+        searchTimeoutId = null;
+      }
+      
+      const searchDuration = Date.now() - searchStartTime;
+      console.error(`❌ [SMS Handler] Search error after ${searchDuration}ms:`, searchErr.message);
+      console.error("❌ [SMS Handler] Search error stack:", searchErr.stack);
+      reply = "Sorry, I'm having trouble searching right now. Please try again in a moment!";
+    }
+    
+    if (!reply || typeof reply !== 'string') {
+      reply = "Sorry, something went wrong. Please try again!";
+    }
+    
+    console.log(`📤 [SMS Handler] Sending reply (${reply.length} chars)`);
+    
+    // Split long messages (600 chars per message)
+    const MAX_SMS_LENGTH = 600;
+    
+    if (reply.length > MAX_SMS_LENGTH) {
+      console.warn(`⚠️ [SMS Handler] Message too long (${reply.length} chars), splitting`);
+      
+      const resultBlocks = reply.split('\n\n');
+      let currentMessage = '';
+      
+      for (let i = 0; i < resultBlocks.length; i++) {
+        const block = resultBlocks[i];
+        const separator = currentMessage ? '\n\n' : '';
+        const testMessage = currentMessage + separator + block;
+        
+        if (testMessage.length > MAX_SMS_LENGTH && currentMessage) {
+          twimlResponse.message(currentMessage);
+          currentMessage = block;
+        } else {
+          currentMessage = testMessage;
+        }
+      }
+      
+      if (currentMessage) {
+        twimlResponse.message(currentMessage);
+      }
+    } else {
+      twimlResponse.message(reply);
+    }
+  }
+
+  // Helper function to send response
+  function sendResponse() {
+    if (!responseSent && !res.headersSent) {
+      responseSent = true;
+      clearTimeout(timeout);
+      const twimlString = twiml.toString();
+      console.log(`📤 [SMS Handler] Preparing to send TwiML (${twimlString.length} chars)`);
+      
+      if (!twimlString.includes('<Message>')) {
+        console.error(`❌ [SMS Handler] TwiML has no <Message> tag!`);
+        const fallbackTwiml = new MessagingResponse();
+        fallbackTwiml.message("Sorry, there was an issue. Please try again!");
+        res.type("text/xml").status(200).send(fallbackTwiml.toString());
+        return;
+      }
+      
+      try {
+        res.type("text/xml").status(200).send(twimlString);
+        console.log(`✅ [SMS Handler] Response sent to ${from}`);
+      } catch (sendErr) {
+        console.error(`❌ [SMS Handler] Error sending response:`, sendErr);
+      }
+    }
+  }
+
+  try {
+    // ✅ STEP 1: Check if user is registered
+    let userDoc = null;
+    let userData = null;
+    try {
+      const userSnapshot = await db.collection("users").where("phone", "==", from).limit(1).get();
+      if (!userSnapshot.empty) {
+        userDoc = userSnapshot.docs[0];
+        userData = { id: userDoc.id, ...userDoc.data() };
+        console.log(`👤 [SMS Handler] Registered user found: ${userData.name || userData.email} (${userData.school || 'no school'})`);
+      } else {
+        console.log(`👤 [SMS Handler] No registered user found for phone: ${from}`);
+      }
+    } catch (userErr) {
+      console.error("❌ [SMS Handler] Error looking up user:", userErr);
+      // Continue without user data - will treat as non-registered
+    }
+
+    // ✅ STEP 2: Handle registered users (unlimited searches, use their school)
+    if (userData) {
+      const school = userData.school || "UNC-Chapel Hill"; // fallback to default
+      
+      if (!incomingRaw) {
+        twiml.message("Tell me what you're looking for on campus 🙂");
+        sendResponse();
+        return;
+      }
+      
+      console.log(`📱 SMS received: "${incomingRaw}" from registered user ${from}`);
+      
+      // Intent detection
       let intent;
       try {
         intent = await Promise.race([
@@ -1153,7 +1305,6 @@ app.post("/sms", async (req, res) => {
         console.log(`🎯 Intent detected: ${intent}`);
       } catch (intentErr) {
         console.error("❌ Intent detection error:", intentErr.message);
-        // Default to search if intent detection fails
         intent = "search";
       }
 
@@ -1162,146 +1313,149 @@ app.post("/sms", async (req, res) => {
           "I'm TheMove! Text me something like \"poker tonight?\" or \"volunteer this weekend.\""
         );
       } else if (intent === "signup") {
-        twiml.message("You can sign up at https://usethemove.com/signup 🚀");
+        twiml.message("You're already signed up! You can update your profile at https://www.usethemove.com/profile 🚀");
       } else if (intent === "random") {
         twiml.message("Try asking about campus events 🙂");
       } else {
-        // ✅ Add timeout wrapper for search
-        console.log(`🔍 [SMS Handler] Starting search for: "${incomingRaw}"`);
-        let reply = null;
-        const searchStartTime = Date.now();
-        let searchTimeoutId = null;
-        
-        try {
-          const searchPromise = searchPostersForSMS(incomingRaw, school);
-          const timeoutPromise = new Promise((_, reject) => {
-            searchTimeoutId = setTimeout(() => {
-              console.error(`⏱️ [SMS Handler] Search timeout after 20s for: "${incomingRaw}"`);
-              reject(new Error("Search timeout"));
-            }, 20000);
-          });
-          
-          reply = await Promise.race([searchPromise, timeoutPromise]);
-          
-          // Clear timeout if search completed successfully
-          if (searchTimeoutId) {
-            clearTimeout(searchTimeoutId);
-            searchTimeoutId = null;
-          }
-          
-          const searchDuration = Date.now() - searchStartTime;
-          console.log(`✅ [SMS Handler] Search completed in ${searchDuration}ms, reply length: ${reply?.length || 0}`);
-          
-          // Validate reply
-          if (!reply || typeof reply !== 'string') {
-            console.error("❌ [SMS Handler] Invalid reply from search:", reply);
-            reply = "Sorry, I couldn't find any events. Try asking in a different way!";
-          }
-        } catch (searchErr) {
-          // Clear timeout if search errored
-          if (searchTimeoutId) {
-            clearTimeout(searchTimeoutId);
-            searchTimeoutId = null;
-          }
-          
-          const searchDuration = Date.now() - searchStartTime;
-          console.error(`❌ [SMS Handler] Search error after ${searchDuration}ms:`, searchErr.message);
-          console.error("❌ [SMS Handler] Search error stack:", searchErr.stack);
-          reply = "Sorry, I'm having trouble searching right now. Please try again in a moment!";
-        }
-        
-        // Ensure we always have a reply
-        if (!reply || typeof reply !== 'string') {
-          console.error("❌ [SMS Handler] No reply set, using fallback");
-          reply = "Sorry, something went wrong. Please try again!";
-        }
-        
-        console.log(`📤 [SMS Handler] Sending reply (${reply.length} chars): "${reply.substring(0, 100)}..."`);
-        
-        // Carrier limit is typically 500-800 chars (not 1600!)
-        // Use 600 chars per message to be safe and avoid carrier rejections
-        const MAX_SMS_LENGTH = 600;
-        
-        if (reply.length > MAX_SMS_LENGTH) {
-          console.warn(`⚠️ [SMS Handler] Message too long (${reply.length} chars), splitting into multiple messages`);
-          
-          // Split by double newlines (between results) to keep results intact
-          const resultBlocks = reply.split('\n\n');
-          let currentMessage = '';
-          let messageCount = 0;
-          
-          for (let i = 0; i < resultBlocks.length; i++) {
-            const block = resultBlocks[i];
-            const separator = currentMessage ? '\n\n' : '';
-            const testMessage = currentMessage + separator + block;
-            
-            // If adding this block would exceed limit, send current message first
-            if (testMessage.length > MAX_SMS_LENGTH && currentMessage) {
-              twiml.message(currentMessage);
-              messageCount++;
-              currentMessage = block;
-            } else {
-              currentMessage = testMessage;
-            }
-          }
-          
-          // Send remaining message
-          if (currentMessage) {
-            twiml.message(currentMessage);
-            messageCount++;
-          }
-          
-          console.log(`✅ [SMS Handler] Split into ${messageCount} messages (max ${MAX_SMS_LENGTH} chars each)`);
-        } else {
-          // Single message is fine
-          twiml.message(reply);
-        }
-        
-        console.log(`✅ [SMS Handler] Message(s) added to TwiML. TwiML messages count: ${twiml.toString().match(/<Message>/g)?.length || 0}`);
+        // Search for registered users (unlimited)
+        await handleSearch(incomingRaw, school, twiml);
       }
-    }
-  } catch (err) {
-    console.error("❌ Twilio /sms error:", err);
-    console.error("Error stack:", err.stack);
-    twiml.message("Something went wrong — try again soon.");
-  } finally {
-    clearTimeout(timeout);
-    // ✅ Always send a response, even if there was an error
-    if (!responseSent && !res.headersSent) {
-      responseSent = true;
-      const twimlString = twiml.toString();
-      console.log(`📤 [SMS Handler] Preparing to send TwiML (${twimlString.length} chars)`);
-      console.log(`📤 [SMS Handler] Full TwiML XML:`, twimlString);
       
-      // Validate TwiML has a message
-      if (!twimlString.includes('<Message>')) {
-        console.error(`❌ [SMS Handler] TwiML has no <Message> tag! TwiML:`, twimlString);
-        // Create a fallback message
-        const fallbackTwiml = new MessagingResponse();
-        fallbackTwiml.message("Sorry, there was an issue. Please try again!");
-        const fallbackString = fallbackTwiml.toString();
-        res.type("text/xml");
-        res.status(200);
-        res.send(fallbackString);
-        console.log(`⚠️ [SMS Handler] Sent fallback message instead`);
+      sendResponse();
+      return;
+    }
+
+    // ✅ STEP 3: Handle non-registered users (3-search limit, school selection required)
+    let smsSession = null;
+    try {
+      const sessionSnapshot = await db.collection("smsSessions").where("phone", "==", from).limit(1).get();
+      if (!sessionSnapshot.empty) {
+        smsSession = { id: sessionSnapshot.docs[0].id, ...sessionSnapshot.docs[0].data() };
+        console.log(`📋 [SMS Handler] SMS session found: ${smsSession.searchCount || 0} searches, school: ${smsSession.school || 'not set'}`);
+      } else {
+        // Create new session
+        const newSessionRef = await db.collection("smsSessions").add({
+          phone: from,
+          school: null,
+          searchCount: 0,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastSearchAt: null
+        });
+        smsSession = { id: newSessionRef.id, phone: from, school: null, searchCount: 0 };
+        console.log(`📋 [SMS Handler] Created new SMS session for ${from}`);
+      }
+    } catch (sessionErr) {
+      console.error("❌ [SMS Handler] Error managing SMS session:", sessionErr);
+      twiml.message("Sorry, there was an error. Please try again later.");
+      sendResponse();
+      return;
+    }
+
+    // ✅ STEP 4: Check if school is selected
+    if (!smsSession.school) {
+      if (!incomingRaw) {
+        twiml.message("👋 Welcome to TheMove! First, please tell me which school you're from (e.g., \"UNC-Chapel Hill\")");
+        sendResponse();
         return;
       }
       
-      try {
-        res.type("text/xml");
-        res.status(200);
-        res.send(twimlString);
-        console.log(`✅ [SMS Handler] Response sent successfully to ${req.body.From || "unknown"}`);
-        console.log(`✅ [SMS Handler] Response status: ${res.statusCode}, headersSent: ${res.headersSent}`);
-      } catch (sendErr) {
-        console.error(`❌ [SMS Handler] Error sending response:`, sendErr);
-        console.error(`❌ [SMS Handler] Error stack:`, sendErr.stack);
+      // Try to detect school from message
+      const detectedSchool = detectSchoolFromMessage(incomingRaw);
+      if (detectedSchool) {
+        // Update session with school
+        await db.collection("smsSessions").doc(smsSession.id).update({
+          school: detectedSchool,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        smsSession.school = detectedSchool;
+        twiml.message(`✅ School set to ${detectedSchool}! You can search up to 3 times before signing up. What are you looking for?`);
+        console.log(`✅ [SMS Handler] School set to ${detectedSchool} for ${from}`);
+        sendResponse();
+        return;
+      } else {
+        // List available schools
+        const activeSchools = (process.env.ACTIVE_SCHOOLS || "UNC-Chapel Hill").split(",").map(s => s.trim());
+        const schoolList = activeSchools.map((s, i) => `${i + 1}. ${s}`).join("\n");
+        twiml.message(`Please select your school by typing the name:\n${schoolList}\n\nOr reply with the number (e.g., "1" for ${activeSchools[0]})`);
+        sendResponse();
+        return;
       }
+    }
+
+    // ✅ STEP 5: Check search limit
+    const searchCount = smsSession.searchCount || 0;
+    if (searchCount >= 3) {
+      twiml.message(
+        `🚫 You've reached your 3-search limit. Sign up for FREE at https://www.usethemove.com/signup to get unlimited searches!`
+      );
+      console.log(`🚫 [SMS Handler] Search limit reached for ${from} (${searchCount} searches)`);
+      sendResponse();
+      return;
+    }
+
+    if (!incomingRaw) {
+      const remaining = 3 - searchCount;
+      twiml.message(`Tell me what you're looking for on campus 🙂 (${remaining} search${remaining !== 1 ? 'es' : ''} left before signup)`);
+      sendResponse();
+      return;
+    }
+
+    // ✅ STEP 6: Handle search for non-registered users
+    let intent;
+    try {
+      intent = await Promise.race([
+        detectIntent(incomingRaw),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Intent detection timeout")), 10000)
+        )
+      ]);
+      console.log(`🎯 Intent detected: ${intent}`);
+    } catch (intentErr) {
+      console.error("❌ Intent detection error:", intentErr.message);
+      intent = "search";
+    }
+
+    if (intent === "info") {
+      twiml.message(
+        "I'm TheMove! Text me something like \"poker tonight?\" or \"volunteer this weekend.\" You can search up to 3 times before signing up."
+      );
+    } else if (intent === "signup") {
+      twiml.message("Sign up for FREE at https://www.usethemove.com/signup 🚀");
+    } else if (intent === "random") {
+      twiml.message("Try asking about campus events 🙂");
     } else {
-      console.warn(`⚠️ [SMS Handler] Response already sent or headers sent. responseSent: ${responseSent}, headersSent: ${res.headersSent}`);
-      if (responseSent) {
-        console.warn(`⚠️ [SMS Handler] Response was already marked as sent - this might be a duplicate send attempt`);
+      // Perform search and increment count
+      console.log(`📱 SMS received: "${incomingRaw}" from non-registered user ${from} (${searchCount}/3 searches)`);
+      await handleSearch(incomingRaw, smsSession.school, twiml);
+      
+      // Increment search count
+      const newCount = searchCount + 1;
+      await db.collection("smsSessions").doc(smsSession.id).update({
+        searchCount: newCount,
+        lastSearchAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      const remaining = 3 - newCount;
+      if (remaining > 0) {
+        // Add reminder about remaining searches
+        twiml.message(`(${remaining} search${remaining !== 1 ? 'es' : ''} left. Sign up at https://www.usethemove.com/signup for unlimited!)`);
+      } else {
+        twiml.message(`🚫 You've reached your 3-search limit. Sign up for FREE at https://www.usethemove.com/signup to continue!`);
       }
+      
+      console.log(`✅ [SMS Handler] Search count updated to ${newCount}/3 for ${from}`);
+    }
+
+    sendResponse();
+  } catch (err) {
+    console.error("❌ Twilio /sms error:", err);
+    console.error("Error stack:", err.stack);
+    if (!responseSent && !res.headersSent) {
+      responseSent = true;
+      clearTimeout(timeout);
+      const errorTwiml = new MessagingResponse();
+      errorTwiml.message("Something went wrong — try again soon.");
+      res.type("text/xml").status(200).send(errorTwiml.toString());
     }
   }
 });
