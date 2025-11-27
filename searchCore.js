@@ -1133,7 +1133,7 @@ async function searchPostersForSMS(query, school) {
     return id.substring(0, 4);
   }
   
-  let msg = 'TheMove\n\n';
+  let msg = 'The Move is:\n\n';
   const MAX_CHARS_2_SEGMENTS = 300; // Leave 20 chars buffer for safety (320 max = 2 segments)
   let totalChars = msg.length; // Start with header length
   let eventsAdded = 0;
