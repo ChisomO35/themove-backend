@@ -751,19 +751,25 @@ async function searchPostersForSMS(query, school) {
   let sorted;
   
   // Check if there's an activity filter (needed for both date and non-date queries)
-  const queryWordsForActivity = queryLower.split(/\s+/).filter(w => w.length > 2);
-  const hasActivityFilter = activityType || costIntent || (queryWordsForActivity.length > 0 && 
-    !queryLower.includes("what") && !queryLower.includes("happening") && 
-    !queryLower.includes("events") && !queryLower.includes("today") && 
-    !queryLower.includes("tomorrow") && !queryLower.includes("weekend"));
+  // Remove common query words to find actual activity keywords
+  const commonWords = new Set(["what", "whats", "happening", "events", "event", "today", "tomorrow", 
+    "tonight", "this", "week", "weekend", "related", "to", "about", "for", "on", "at", "the", "a", "an",
+    "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did"]);
+  const queryWordsForActivity = queryLower.split(/\s+/)
+    .filter(w => w.length > 2 && !commonWords.has(w.toLowerCase()));
+  
+  // Has activity filter if: explicit activity type, cost intent, or meaningful keywords beyond date/time words
+  // Also check for "related to X" or "about X" patterns
+  const hasRelatedToPattern = /related\s+to\s+\w+|about\s+\w+|for\s+\w+/.test(queryLower);
+  const hasActivityFilter = activityType || costIntent || queryWordsForActivity.length > 0 || hasRelatedToPattern;
   
   if (targetDate) {
     // Date-specific query: Check if there's also an activity filter
     
     if (hasActivityFilter) {
       // Date + activity query: Apply semantic ranking but filter by date first
-      console.log(`📅 [Date + Activity Query] Filtering by date AND applying semantic ranking`);
-      const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+      console.log(`📅 [Date + Activity Query] Filtering by date AND applying semantic ranking for: "${queryWordsForActivity.join(', ')}"`);
+      const queryWords = queryWordsForActivity;
       
       const enhancedResults = filtered.map((match) => {
         let enhancedScore = match.score;
