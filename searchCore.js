@@ -950,8 +950,9 @@ async function searchPostersForSMS(query, school) {
       eventLine += ` @ ${location}`;
     }
     
-    // Short URL: usethemove.com/p/XXXX (using first 4 chars of ID)
-    eventLine += `: ${shortUrl}/p/${shortenPosterId(match.id)}`;
+    // Short URL: usethemove.com/p/XXXX (using first 4 chars of ID, uppercase for consistency)
+    const shortId = shortenPosterId(match.id).toUpperCase();
+    eventLine += `: ${shortUrl}/p/${shortId}`;
     
     msg += eventLine;
     
@@ -960,6 +961,9 @@ async function searchPostersForSMS(query, school) {
       msg += '\n';
     }
   });
+  
+  // Remove the "Found X events:" header to save characters - just show the events
+  // The message is now just the event list, which should be <160 chars for 1-2 events
 
     const finalMsg = msg.trim();
     console.log(`✅ [searchPostersForSMS] Returning message, length: ${finalMsg.length}`);
