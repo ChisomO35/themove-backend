@@ -656,11 +656,12 @@ async function searchPostersForSMS(query, school) {
       return d >= timeRange.start && d <= timeRange.end;
     });
   } else if (targetDate) {
-    const targetISO = targetDate.toISOString().slice(0, 10);
+    const targetISO = localDateToISO(targetDate);
     filtered = filtered.filter((m) => {
-      const d = getLocalDateFromISO(m.metadata.date_normalized);
-      if (!d) return false; // Exclude events without dates when filtering by date
-      return d.toISOString().slice(0, 10) === targetISO;
+      const eventDate = m.metadata.date_normalized;
+      if (!eventDate) return false; // Exclude events without dates when filtering by date
+      // Compare ISO strings directly (they're already in YYYY-MM-DD format)
+      return eventDate === targetISO;
     });
   }
 
