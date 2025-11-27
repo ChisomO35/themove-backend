@@ -769,6 +769,13 @@ async function searchPostersForSMS(query, school) {
     });
   } else {
     // General query: apply semantic ranking
+    // Detect if this is a single-word activity query (e.g., "basketball", "yoga", "poker")
+    const isSingleWordActivityQuery = !targetTime && !timeRange && 
+      queryLower.trim().split(/\s+/).length === 1 && 
+      queryLower.length > 3 && // Not "free" or "what"
+      !queryLower.includes("free") && // Not "free"
+      !queryLower.includes("what"); // Not "what"
+    
     const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
     
     const enhancedResults = filtered.map((match) => {
@@ -879,9 +886,11 @@ async function searchPostersForSMS(query, school) {
     };
     });
     
-    // Filter by minimum quality threshold (0.5 for general queries)
-    const qualityFiltered = enhancedResults.filter(m => m.enhancedScore >= 0.5);
-    console.log(`🔍 [Quality Filter] Using threshold: 0.5, ${enhancedResults.length} results before, ${qualityFiltered.length} after`);
+    // Filter by minimum quality threshold
+    // Lower threshold for single-word activity queries (they may have lower semantic similarity)
+    const minThreshold = isSingleWordActivityQuery ? 0.35 : 0.5;
+    const qualityFiltered = enhancedResults.filter(m => m.enhancedScore >= minThreshold);
+    console.log(`🔍 [Quality Filter] Using threshold: ${minThreshold}${isSingleWordActivityQuery ? ' (single-word query)' : ''}, ${enhancedResults.length} results before, ${qualityFiltered.length} after`);
     
     // Sort by enhanced score
     sorted = qualityFiltered.sort((a, b) => b.enhancedScore - a.enhancedScore);
