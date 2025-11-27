@@ -1168,7 +1168,7 @@ async function searchPostersForSMS(query, school) {
     
     // Build the compact line
     if (dateTimeParts.length > 0) {
-      eventLine += ` – ${dateTimeParts.join(' ')}`;
+      eventLine += ` - ${dateTimeParts.join(' ')}`;
     }
     if (location) {
       eventLine += ` @ ${location}`;
