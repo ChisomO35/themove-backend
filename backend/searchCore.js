@@ -1192,15 +1192,7 @@ async function searchPostersForSMS(query, school) {
     eventsAdded++;
   });
   
-  // Add note if results were limited (for any query type)
-  if (totalFound > eventsAdded) {
-    const note = `\n\n(Showing ${eventsAdded} of ${totalFound}. Be more specific!)`;
-    // Check if note would push us over limit
-    if (totalChars + note.length <= MAX_CHARS_2_SEGMENTS) {
-      msg += note;
-      totalChars = msg.length;
-    }
-  }
+  // Note: Removed "(Showing X of Y)" message to save characters
   
   // Remove the "Found X events:" header to save characters - just show the events
   // The message is now just the event list, which should be <160 chars for 1-2 events
