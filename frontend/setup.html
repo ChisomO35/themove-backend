@@ -68,13 +68,13 @@
           <!-- Phone Section -->
           <div>
             <label class="block font-medium mb-2">Phone Number (for event updates)</label>
-            <div class="flex gap-2">
+            <div class="flex flex-col sm:flex-row gap-2">
               <div class="flex items-center flex-grow border border-gray-300 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary">
-                <span class="px-3 py-2 bg-gray-50 text-gray-700 border-r border-gray-300">+1</span>
+                <span class="px-3 py-2 bg-gray-50 text-gray-700 border-r border-gray-300 text-sm sm:text-base">+1</span>
                 <input
                   id="phone"
                   placeholder="234 567 8901"
-                  class="form-input flex-grow border-0 focus:ring-0"
+                  class="form-input flex-grow border-0 focus:ring-0 text-sm sm:text-base"
                   type="tel"
                   maxlength="14"
                 />
@@ -82,10 +82,31 @@
               <button
                 id="verify-phone-button"
                 onclick="verifyPhoneNumber()"
-                class="btn btn-primary"
+                class="btn btn-primary whitespace-nowrap text-sm sm:text-base"
               >
                 Verify
               </button>
+            </div>
+          </div>
+
+          <!-- Daily Digest Opt-In -->
+          <div class="mt-6 p-4 bg-primary-light rounded-xl border border-primary/20">
+            <div class="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="dailyDigestOptIn"
+                checked
+                class="mt-1 w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer"
+              />
+              <div>
+                <label for="dailyDigestOptIn" class="font-medium text-dark cursor-pointer block">
+                  📬 Receive Daily Digest via SMS
+                </label>
+                <p class="text-sm text-gray-600 mt-1">
+                  Get personalized campus event recommendations delivered to your phone once per day. 
+                  You can opt out anytime from your profile.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -393,7 +414,8 @@
           const selectedTags = Array.from(document.querySelectorAll(".tag.bg-primary")).map(
             (t) => t.textContent
           );
-          const payload = { uid: currentUser.uid, phone, dorm, interests: selectedTags };
+          const dailyDigestOptIn = document.getElementById("dailyDigestOptIn").checked;
+          const payload = { uid: currentUser.uid, phone, dorm, interests: selectedTags, dailyDigestOptIn };
 
           const idToken = await currentUser.getIdToken(true);
           const res = await fetch("https://themove-backend-production.up.railway.app/updateUser", {
