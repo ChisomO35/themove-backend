@@ -4,11 +4,18 @@ const dotenv = require("dotenv");
 const admin = require("firebase-admin");
 const { OpenAI } = require("openai");
 const { Pinecone } = require("@pinecone-database/pinecone");
+const twilio = require("twilio");
 
 dotenv.config();
 
 // --- Set base URL for poster links ---
 const BASE_URL = process.env.PUBLIC_APP_URL || "https://api.usethemove.com";
+
+// --- Initialize Twilio ---
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
 
 // --- Initialize Firebase ---
 if (!admin.apps.length) {
@@ -62,6 +69,82 @@ function getLocalDateFromISO(iso) {
   return new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
 }
 
+// --- Helper: format compact date (same as searchCore.js) ---
+function formatCompactDate(date) {
+  const weekday = date.toLocaleDateString("en-US", { weekday: "short" });
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  return `${weekday} ${month}/${day}`;
+}
+
+// --- Helper: format compact time (same as searchCore.js) ---
+function formatCompactTime(timeStr) {
+  if (!timeStr) return '';
+  return timeStr.replace(/\s+/g, '').replace(/AM/gi, 'a').replace(/PM/gi, 'p');
+}
+
+// --- Format events for SMS (same format as searchCore.js) ---
+function formatEventsForSMS(matches, baseUrl) {
+  const shortUrl = baseUrl.replace(/^https?:\/\//, '').replace(/^www\./, '');
+  let msg = 'DailyDigest\n\n'; // Header
+  const MAX_CHARS_2_SEGMENTS = 300; // 2 segments max
+  let totalChars = msg.length;
+  let eventsAdded = 0;
+  
+  matches.forEach((match, i) => {
+    let eventLine = `${i + 1}) `;
+    
+    // Title (truncate if too long)
+    const title = match.title || "Untitled";
+    const maxTitleLength = 25;
+    const shortTitle = title.length > maxTitleLength 
+      ? title.substring(0, maxTitleLength - 3) + '...' 
+      : title;
+    eventLine += shortTitle;
+    
+    // Date and time - compact format
+    const dateTimeParts = [];
+    if (match.date_normalized) {
+      const eventDate = getLocalDateFromISO(match.date_normalized);
+      if (eventDate) {
+        dateTimeParts.push(formatCompactDate(eventDate));
+      }
+    }
+    if (match.time) {
+      dateTimeParts.push(formatCompactTime(match.time));
+    }
+    
+    // Location
+    const location = match.location || '';
+    
+    // Build the compact line
+    if (dateTimeParts.length > 0) {
+      eventLine += ` – ${dateTimeParts.join(' ')}`;
+    }
+    if (location) {
+      eventLine += ` @ ${location}`;
+    }
+    
+    // URL
+    eventLine += `: ${shortUrl}/poster/${match.id}`;
+    
+    // Check if adding this event would exceed 2-segment limit
+    const spacing = eventsAdded > 0 ? '\n\n' : '';
+    const testLength = totalChars + spacing.length + eventLine.length;
+    
+    if (testLength > MAX_CHARS_2_SEGMENTS) {
+      console.log(`📏 [Daily Digest] Stopping at ${eventsAdded} events (would be ${testLength} chars)`);
+      return; // Stop adding events
+    }
+    
+    msg += spacing + eventLine;
+    totalChars = msg.length;
+    eventsAdded++;
+  });
+  
+  return msg.trim();
+}
+
 // --- Main function ---
 async function runDailyDigest() {
   console.log("🧠 Running Daily Digest (Optimized with Pinecone)...");
@@ -81,6 +164,12 @@ async function runDailyDigest() {
     // ✅ Skip users who did not opt in
     if (!user.dailyDigestOptIn) {
       console.log(`⏭️ Skipping ${user.name || user.email} — not opted in`);
+      continue;
+    }
+
+    // ✅ Skip users without phone numbers
+    if (!user.phone) {
+      console.log(`⏭️ Skipping ${user.name || user.email} — no phone number`);
       continue;
     }
 
@@ -216,20 +305,40 @@ async function runDailyDigest() {
         continue;
       }
 
-      // ✅ Format results (use enhanced score for display)
+      // ✅ Format results for SMS (same format as searchCore.js)
       const topMatches = filtered.map((match) => ({
         id: match.id,
         title: match.metadata.title || "Untitled",
-        score: match.enhancedScore || match.score, // Use enhanced score
-        url: `${BASE_URL}/poster/${match.id}`,
+        date_normalized: match.metadata.date_normalized,
+        time: match.metadata.time,
+        location: match.metadata.location,
+        score: match.enhancedScore || match.score,
       }));
 
       console.log(`\n🏆 Top ${topMatches.length} Matches for ${user.name || user.email}:`);
       topMatches.forEach((match, i) => {
         console.log(
-          `   ${i + 1}. ${match.title} (${(match.score * 100).toFixed(1)}% similarity)\n      🔗 ${match.url}`
+          `   ${i + 1}. ${match.title} (${(match.score * 100).toFixed(1)}% similarity)`
         );
       });
+
+      // ✅ Send SMS
+      try {
+        const smsMessage = formatEventsForSMS(topMatches, BASE_URL);
+        
+        if (smsMessage) {
+          await twilioClient.messages.create({
+            body: smsMessage,
+            from: process.env.TWILIO_PHONE_NUMBER || "+14244478183",
+            to: user.phone,
+          });
+          
+          console.log(`📱 [Daily Digest] SMS sent to ${user.phone} (${smsMessage.length} chars)`);
+        }
+      } catch (smsError) {
+        console.error(`❌ [Daily Digest] Error sending SMS to ${user.phone}:`, smsError);
+        // Continue processing other users even if SMS fails
+      }
 
       // ✅ Record shown posters
       if (topMatches.length > 0) {

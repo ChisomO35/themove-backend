@@ -63,6 +63,10 @@ const twilioClient = twilio(
 // ⭐️ NEW — import your SMS-specific search logic
 const { detectIntent, searchPostersForSMS } = require("./searchCore");
 
+// ⭐️ NEW — import daily digest for cron scheduling
+const cron = require("node-cron");
+const { runDailyDigest } = require("./dailyDigest");
+
 // ⭐️ NEW — import auth helpers
 const {
   sendPhoneVerificationCode,
@@ -1950,4 +1954,21 @@ app.post("/auth/reset-password", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+// ⏰ Schedule daily digest to run at 9:00 AM Eastern Time daily
+// Cron format: minute hour day month dayOfWeek
+// 0 9 * * * = 9:00 AM every day (Eastern Time)
+cron.schedule("0 9 * * *", async () => {
+  console.log("⏰ [Cron] Running scheduled daily digest...");
+  try {
+    await runDailyDigest();
+    console.log("✅ [Cron] Daily digest completed successfully");
+  } catch (error) {
+    console.error("❌ [Cron] Daily digest failed:", error);
+  }
+}, {
+  timezone: "America/New_York" // Eastern Time
+});
+
+console.log("⏰ Daily digest scheduled: 9:00 AM Eastern Time daily");
 
