@@ -736,10 +736,32 @@ async function searchPostersForSMS(query, school) {
     });
   }
 
-  // ✅ Hyper-accurate ranking: multiple signals for precision
-  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+  // ✅ For date-specific queries, skip ALL semantic ranking - just show all events on that date
+  // For general queries, apply hyper-accurate ranking with multiple signals
+  let sorted;
   
-  const enhancedResults = filtered.map((match) => {
+  if (targetDate) {
+    // Date-specific query: show ALL events on that date, sorted by time (earliest first)
+    console.log(`📅 [Date Query] Skipping semantic similarity ranking - showing ALL events on date`);
+    sorted = filtered.map((match) => {
+      // Use time for sorting if available, otherwise use title
+      const time = match.metadata.time_normalized_start || "99:99"; // Put events without time at end
+      return {
+        ...match,
+        enhancedScore: 1.0, // All events on the requested date are equally relevant
+        sortKey: time + (match.metadata.title || "").toLowerCase() // Sort by time, then title
+      };
+    }).sort((a, b) => {
+      // Sort by time (earliest first), then by title
+      if (a.sortKey < b.sortKey) return -1;
+      if (a.sortKey > b.sortKey) return 1;
+      return 0;
+    });
+  } else {
+    // General query: apply semantic ranking
+    const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+    
+    const enhancedResults = filtered.map((match) => {
     let enhancedScore = match.score;
     let boostReasons = [];
     
@@ -833,37 +855,38 @@ async function searchPostersForSMS(query, school) {
       enhancedScore: enhancedScore,
       boostReasons: boostReasons
     };
-  });
-  
-  // Filter by minimum quality threshold
-  // Lower threshold (0.4) for date-specific queries since semantic similarity may be low
-  // but the user explicitly wants events on that date
-  const minThreshold = targetDate ? 0.4 : 0.5;
-  const qualityFiltered = enhancedResults.filter(m => m.enhancedScore >= minThreshold);
-  console.log(`🔍 [Quality Filter] Using threshold: ${minThreshold}, ${enhancedResults.length} results before, ${qualityFiltered.length} after`);
-  
-  // Sort by enhanced score
-  const sorted = qualityFiltered.sort((a, b) => b.enhancedScore - a.enhancedScore);
+    });
+    
+    // Filter by minimum quality threshold (0.5 for general queries)
+    const qualityFiltered = enhancedResults.filter(m => m.enhancedScore >= 0.5);
+    console.log(`🔍 [Quality Filter] Using threshold: 0.5, ${enhancedResults.length} results before, ${qualityFiltered.length} after`);
+    
+    // Sort by enhanced score
+    sorted = qualityFiltered.sort((a, b) => b.enhancedScore - a.enhancedScore);
+  }
   
   // ✅ Adaptive result count based on quality
-  // For date-specific queries, show more results since user explicitly asked for that date
-  let resultCount = targetDate ? 5 : 3; // Default: 5 for date queries, 3 for general
-  if (sorted.length > 0) {
-    const topScore = sorted[0].enhancedScore;
-    if (targetDate) {
-      // For date queries, be more generous - show up to 5 results if available
-      resultCount = Math.min(5, sorted.length);
-      console.log(`📅 [Date Query] Showing ${resultCount} results for date-specific query`);
-    } else if (topScore > 0.8 && sorted.length >= 5) {
-      resultCount = 5; // Show up to 5 if excellent matches
-    } else if (topScore > 0.7 && sorted.length >= 4) {
-      resultCount = 4; // Show up to 4 if very good matches
-    } else if (topScore > 0.6 && sorted.length >= 3) {
-      resultCount = 3; // Show 3 if good matches
-    } else if (topScore > 0.5 && sorted.length >= 2) {
-      resultCount = 2; // Show 2 if decent matches
-    } else {
-      resultCount = Math.min(1, sorted.length); // Show 1 if weak matches
+  // For date-specific queries, show ALL results (no limit)
+  let resultCount;
+  if (targetDate) {
+    // For date queries, show ALL events on that date
+    resultCount = sorted.length;
+    console.log(`📅 [Date Query] Showing ALL ${resultCount} events on requested date`);
+  } else {
+    resultCount = 3; // Default for general queries
+    if (sorted.length > 0) {
+      const topScore = sorted[0].enhancedScore;
+      if (topScore > 0.8 && sorted.length >= 5) {
+        resultCount = 5; // Show up to 5 if excellent matches
+      } else if (topScore > 0.7 && sorted.length >= 4) {
+        resultCount = 4; // Show up to 4 if very good matches
+      } else if (topScore > 0.6 && sorted.length >= 3) {
+        resultCount = 3; // Show 3 if good matches
+      } else if (topScore > 0.5 && sorted.length >= 2) {
+        resultCount = 2; // Show 2 if decent matches
+      } else {
+        resultCount = Math.min(1, sorted.length); // Show 1 if weak matches
+      }
     }
   }
   
