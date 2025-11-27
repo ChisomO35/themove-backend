@@ -685,14 +685,18 @@ async function searchPostersForSMS(query, school) {
   // --- cost filter (if "free" mentioned) ---
   if (costIntent === "free") {
     filtered = filtered.filter((m) => {
-      const cost = (m.metadata.cost || "").toLowerCase();
-      // Match free events: cost is empty, "free", "no cost", "$0", etc.
+      const cost = (m.metadata.cost || "").toLowerCase().trim();
+      // Match free events: cost is empty (implicitly free), "free", "no cost", "$0", etc.
+      // Treat empty cost as potentially free for "free" queries
       return !cost || 
+             cost === "" ||
              cost.includes("free") || 
              cost.includes("no cost") || 
              cost.includes("complimentary") ||
+             cost.includes("gratis") ||
              cost === "$0" ||
-             cost === "0";
+             cost === "0" ||
+             cost === "free";
     });
     
     // If no free events found, still return results but note they may not all be free
