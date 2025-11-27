@@ -1050,33 +1050,30 @@ app.get("/p/:shortId", async (req, res) => {
     }
     
     // Otherwise, search for posters that start with this prefix (case-insensitive)
-    // Get recent posters first (most likely to be accessed)
-    const recentPosters = await db
-      .collection("posters")
-      .orderBy("timestamp", "desc")
-      .limit(500)
-      .get();
+    // Get all posters and filter (no orderBy to avoid index requirement)
+    console.log(`🔍 [Short URL] Searching for poster with prefix: ${shortId}`);
+    const allPosters = await db.collection("posters").limit(5000).get();
     
     const shortIdUpper = shortId.toUpperCase();
-    for (const doc of recentPosters.docs) {
-      if (doc.id.toUpperCase().startsWith(shortIdUpper)) {
-        console.log(`✅ [Short URL] Found poster by prefix: ${doc.id} (matched ${shortId})`);
-        return res.redirect(`/poster/${doc.id}`);
+    let foundMatch = null;
+    
+    for (const doc of allPosters.docs) {
+      const docIdUpper = doc.id.toUpperCase();
+      if (docIdUpper.startsWith(shortIdUpper)) {
+        // If multiple matches, prefer exact case match or first match
+        if (!foundMatch || doc.id.startsWith(shortId)) {
+          foundMatch = doc.id;
+        }
       }
     }
     
-    // If not found in recent, try all posters (slower but more comprehensive)
-    console.log(`⚠️ [Short URL] Not found in recent posters, searching all...`);
-    const allPosters = await db.collection("posters").limit(2000).get();
-    
-    for (const doc of allPosters.docs) {
-      if (doc.id.toUpperCase().startsWith(shortIdUpper)) {
-        console.log(`✅ [Short URL] Found poster in full search: ${doc.id} (matched ${shortId})`);
-        return res.redirect(`/poster/${doc.id}`);
-      }
+    if (foundMatch) {
+      console.log(`✅ [Short URL] Found poster by prefix: ${foundMatch} (matched ${shortId})`);
+      return res.redirect(`/poster/${foundMatch}`);
     }
     
     console.log(`❌ [Short URL] Poster not found for shortId: ${shortId}`);
+    console.log(`🔍 [Short URL] Searched ${allPosters.size} posters`);
     return res.status(404).send("Poster not found.");
   } catch (err) {
     console.error("❌ [Short URL] Error fetching short poster URL:", err);
