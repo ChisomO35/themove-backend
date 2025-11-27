@@ -15,6 +15,7 @@ const twilioClient = twilio(
 // ✅ FIX: Ensure we get the Firestore instance from the same initialized Firebase app
 // This ensures authHelpers uses the same Firestore project as server.js
 let db;
+let dbInitialized = false;
 function getDb() {
   if (!db) {
     // Ensure Firebase is initialized
@@ -23,7 +24,18 @@ function getDb() {
     }
     // Get Firestore instance from the default app (same one server.js uses)
     db = admin.firestore();
-    db.settings({ ignoreUndefinedProperties: true });
+    
+    // Only set settings if Firestore hasn't been initialized yet
+    if (!dbInitialized) {
+      try {
+        db.settings({ ignoreUndefinedProperties: true });
+        dbInitialized = true;
+      } catch (settingsError) {
+        // If settings() fails, Firestore was already initialized elsewhere - that's fine
+        // Just continue without setting it
+        console.log("ℹ️ [authHelpers] Firestore already initialized, skipping settings()");
+      }
+    }
     
     // Log to verify we're using the correct instance
     const app = admin.app();
