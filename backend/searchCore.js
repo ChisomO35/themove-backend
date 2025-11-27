@@ -768,8 +768,15 @@ async function searchPostersForSMS(query, school) {
     
     if (hasActivityFilter) {
       // Date + activity query: Apply semantic ranking but filter by date first
-      console.log(`📅 [Date + Activity Query] Filtering by date AND applying semantic ranking for: "${queryWordsForActivity.join(', ')}"`);
-      const queryWords = queryWordsForActivity;
+      // Extract activity keywords from query (including "related to X" patterns)
+      let activityKeywords = [...queryWordsForActivity];
+      const relatedToMatch = queryLower.match(/related\s+to\s+(\w+)/);
+      if (relatedToMatch) activityKeywords.push(relatedToMatch[1]);
+      const aboutMatch = queryLower.match(/about\s+(\w+)/);
+      if (aboutMatch) activityKeywords.push(aboutMatch[1]);
+      
+      console.log(`📅 [Date + Activity Query] Filtering by date AND applying semantic ranking for: "${activityKeywords.join(', ')}"`);
+      const queryWords = activityKeywords;
       
       const enhancedResults = filtered.map((match) => {
         let enhancedScore = match.score;
