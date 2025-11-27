@@ -877,57 +877,93 @@ async function searchPostersForSMS(query, school) {
     return `I couldn't find any upcoming events that match. ${suggestion}`;
   }
 
-  // ✅ Optimized SMS formatting - NO EMOJIS to force GSM-7 encoding (160 chars/segment vs 70)
-  // Compact format to minimize segments and costs
+  // ✅ ULTRA-OPTIMIZED SMS formatting - NO EMOJIS, <160 chars per message to fit in 1 segment
+  // Format: "1) Title – Date Time @ Location: shorturl"
   const shortUrl = BASE_URL.replace(/^https?:\/\//, '').replace(/^www\./, '');
-  let msg = `Found ${topResults.length} ${topResults.length === 1 ? 'event' : 'events'}:\n\n`;
+  
+  // Helper to format date compactly: "Sun 11/30" instead of "Sun, Nov 30"
+  function formatCompactDate(date) {
+    const weekday = date.toLocaleDateString("en-US", { weekday: "short" });
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    return `${weekday} ${month}/${day}`;
+  }
+  
+  // Helper to format time compactly: "11:30a" instead of "11:30 AM"
+  function formatCompactTime(timeStr) {
+    if (!timeStr) return '';
+    // Remove spaces and convert AM/PM to lowercase a/p
+    return timeStr.replace(/\s+/g, '').replace(/AM/gi, 'a').replace(/PM/gi, 'p');
+  }
+  
+  // Helper to shorten poster ID (use first 4 chars)
+  function shortenPosterId(id) {
+    return id.substring(0, 4);
+  }
+  
+  let msg = '';
   
   topResults.forEach((match, i) => {
-    // Number and title - no emoji
-    msg += `${i + 1}) ${match.metadata.title}\n`;
+    // Build compact event line: "1) Title – Date Time @ Location: url"
+    let eventLine = `${i + 1}) `;
     
-    // Date, time, and location on one line - compact format
-    const parts = [];
+    // Title (truncate if too long)
+    const title = match.metadata.title;
+    const maxTitleLength = 25; // Leave room for rest of line
+    const shortTitle = title.length > maxTitleLength 
+      ? title.substring(0, maxTitleLength - 3) + '...' 
+      : title;
+    eventLine += shortTitle;
+    
+    // Date and time - compact format
+    const dateTimeParts = [];
     if (match.metadata.date_normalized) {
       const eventDate = getLocalDateFromISO(match.metadata.date_normalized);
       if (eventDate) {
-        const dateStr = eventDate.toLocaleDateString("en-US", {
-          weekday: "short",
-          month: "short",
-          day: "numeric"
-        });
-        parts.push(dateStr);
+        dateTimeParts.push(formatCompactDate(eventDate));
       }
     }
     if (match.metadata.time) {
-      // Convert time to 12-hour format if needed, or keep as-is
-      parts.push(match.metadata.time);
-    }
-    if (match.metadata.location) {
-      parts.push(`@ ${match.metadata.location}`);
-    }
-    if (parts.length > 0) {
-      msg += `${parts.join(' ')}\n`;
+      dateTimeParts.push(formatCompactTime(match.metadata.time));
     }
     
-    // Cost - only if not free
-    const cost = (match.metadata.cost || "").trim();
-    if (cost) {
-      const costLower = cost.toLowerCase();
-      if (!costLower.includes("free") && !costLower.includes("no cost") && 
-          !costLower.includes("complimentary") && cost !== "$0" && cost !== "0") {
-        msg += `${cost}\n`;
+    // Location - abbreviate common locations
+    let location = match.metadata.location || '';
+    const locationAbbrevs = {
+      'Student Union': 'SU',
+      'Memorial Hall': 'Mem Hall',
+      'Carolina Union': 'Union',
+      'Franklin Street': 'Franklin St'
+    };
+    for (const [full, abbrev] of Object.entries(locationAbbrevs)) {
+      if (location.includes(full)) {
+        location = location.replace(full, abbrev);
+        break;
       }
     }
     
-    // Descriptive text with URL - carriers will make URL clickable
-    msg += `View Poster: ${shortUrl}/poster/${match.id}`;
+    // Build the compact line
+    if (dateTimeParts.length > 0) {
+      eventLine += ` – ${dateTimeParts.join(' ')}`;
+    }
+    if (location) {
+      eventLine += ` @ ${location}`;
+    }
     
-    // Single line break between results
+    // Short URL: usethemove.com/p/XXXX (using first 4 chars of ID, uppercase for consistency)
+    const shortId = shortenPosterId(match.id).toUpperCase();
+    eventLine += `: ${shortUrl}/p/${shortId}`;
+    
+    msg += eventLine;
+    
+    // Single line break between results (no double break to save chars)
     if (i < topResults.length - 1) {
-      msg += `\n\n`;
+      msg += '\n';
     }
   });
+  
+  // Remove the "Found X events:" header to save characters - just show the events
+  // The message is now just the event list, which should be <160 chars for 1-2 events
 
     const finalMsg = msg.trim();
     console.log(`✅ [searchPostersForSMS] Returning message, length: ${finalMsg.length}`);
