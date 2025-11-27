@@ -68,8 +68,12 @@ function normalizePhoneToE164(phone) {
 // Send SMS verification code via Twilio
 async function sendPhoneVerificationCode(phoneNumber) {
   try {
+    console.log(`📱 [sendPhoneVerificationCode] Received phone: ${phoneNumber}`);
     const normalized = normalizePhoneToE164(phoneNumber);
+    console.log(`📱 [sendPhoneVerificationCode] Normalized to: ${normalized}`);
+    
     const code = generateVerificationCode();
+    console.log(`📱 [sendPhoneVerificationCode] Generated code: ${code}`);
     const expiresAt = Date.now() + 10 * 60 * 1000;
 
     phoneVerificationCodes.set(normalized, {
@@ -77,17 +81,27 @@ async function sendPhoneVerificationCode(phoneNumber) {
       expiresAt,
       attempts: 0,
     });
+    console.log(`📱 [sendPhoneVerificationCode] Code stored in memory`);
 
-    await twilioClient.messages.create({
+    const fromNumber = process.env.TWILIO_PHONE_NUMBER || "+14244478183";
+    console.log(`📱 [sendPhoneVerificationCode] Sending SMS from: ${fromNumber} to: ${normalized}`);
+    console.log(`📱 [sendPhoneVerificationCode] Twilio Account SID: ${process.env.TWILIO_ACCOUNT_SID ? process.env.TWILIO_ACCOUNT_SID.substring(0, 10) + '...' : 'MISSING'}`);
+    console.log(`📱 [sendPhoneVerificationCode] Twilio Auth Token: ${process.env.TWILIO_AUTH_TOKEN ? 'PRESENT' : 'MISSING'}`);
+
+    const message = await twilioClient.messages.create({
       body: `Your TheMove verification code is: ${code}. This code expires in 10 minutes.`,
-      from: process.env.TWILIO_PHONE_NUMBER || "+14244478183",
+      from: fromNumber,
       to: normalized,
     });
 
+    console.log(`✅ [sendPhoneVerificationCode] SMS sent successfully! Message SID: ${message.sid}`);
     return { success: true, message: "Verification code sent" };
   } catch (error) {
-    console.error("❌ Error sending phone verification:", error);
-    return { success: false, message: "Failed to send verification code" };
+    console.error("❌ [sendPhoneVerificationCode] Error sending phone verification:", error);
+    console.error("❌ [sendPhoneVerificationCode] Error message:", error.message);
+    console.error("❌ [sendPhoneVerificationCode] Error code:", error.code);
+    console.error("❌ [sendPhoneVerificationCode] Error stack:", error.stack);
+    return { success: false, message: `Failed to send verification code: ${error.message || 'Unknown error'}` };
   }
 }
 
