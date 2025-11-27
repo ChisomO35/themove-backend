@@ -1037,31 +1037,50 @@ app.get("/poster/:id", async (req, res) => {
 
 // ✅ Short URL route for SMS: /p/XXXX redirects to /poster/FullID
 // This allows SMS to use 4-char IDs instead of full 20-char IDs
-// Note: For now, we'll search all posters and find one that starts with the shortId
-// In production, consider storing a shortId field when creating posters for faster lookup
 app.get("/p/:shortId", async (req, res) => {
   try {
-    const shortId = req.params.shortId.toUpperCase();
+    const shortId = req.params.shortId;
+    console.log(`🔍 [Short URL] Looking up poster with shortId: ${shortId}`);
     
-    // First, try if shortId is actually a full ID (fallback)
+    // First, try if shortId is actually a full ID (common case)
     const directDoc = await db.collection("posters").doc(shortId).get();
     if (directDoc.exists) {
+      console.log(`✅ [Short URL] Found poster by full ID: ${shortId}`);
       return res.redirect(`/poster/${shortId}`);
     }
     
-    // Otherwise, search for posters that start with this prefix
-    // Get all posters and filter client-side (not ideal for scale, but works for now)
-    const allPosters = await db.collection("posters").limit(1000).get();
+    // Otherwise, search for posters that start with this prefix (case-insensitive)
+    // Get recent posters first (most likely to be accessed)
+    const recentPosters = await db
+      .collection("posters")
+      .orderBy("timestamp", "desc")
+      .limit(500)
+      .get();
     
-    for (const doc of allPosters.docs) {
-      if (doc.id.toUpperCase().startsWith(shortId)) {
+    const shortIdUpper = shortId.toUpperCase();
+    for (const doc of recentPosters.docs) {
+      if (doc.id.toUpperCase().startsWith(shortIdUpper)) {
+        console.log(`✅ [Short URL] Found poster by prefix: ${doc.id} (matched ${shortId})`);
         return res.redirect(`/poster/${doc.id}`);
       }
     }
     
+    // If not found in recent, try all posters (slower but more comprehensive)
+    console.log(`⚠️ [Short URL] Not found in recent posters, searching all...`);
+    const allPosters = await db.collection("posters").limit(2000).get();
+    
+    for (const doc of allPosters.docs) {
+      if (doc.id.toUpperCase().startsWith(shortIdUpper)) {
+        console.log(`✅ [Short URL] Found poster in full search: ${doc.id} (matched ${shortId})`);
+        return res.redirect(`/poster/${doc.id}`);
+      }
+    }
+    
+    console.log(`❌ [Short URL] Poster not found for shortId: ${shortId}`);
     return res.status(404).send("Poster not found.");
   } catch (err) {
-    console.error("❌ Error fetching short poster URL:", err);
+    console.error("❌ [Short URL] Error fetching short poster URL:", err);
+    console.error("❌ [Short URL] Error stack:", err.stack);
     res.status(404).send("Poster not found.");
   }
 });

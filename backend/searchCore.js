@@ -944,9 +944,9 @@ async function searchPostersForSMS(query, school) {
     
     msg += eventLine;
     
-    // Single line break between results (no double break to save chars)
+    // Add spacing between results (single line break to save chars but still readable)
     if (i < topResults.length - 1) {
-      msg += '\n';
+      msg += '\n\n';
     }
   });
   
