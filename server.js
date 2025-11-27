@@ -55,6 +55,10 @@ function getOpenAI() {
 // ⭐️ NEW — Twilio
 const twilio = require("twilio");
 const MessagingResponse = twilio.twiml.MessagingResponse;
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
 
 // ⭐️ NEW — import your SMS-specific search logic
 const { detectIntent, searchPostersForSMS } = require("./searchCore");
@@ -429,6 +433,38 @@ app.post("/updateUser", verifyFirebaseToken, ensureUncEmail, async (req, res) =>
     ], { namespace: PINECONE_NAMESPACE });
 
     console.log(`🧩 Updated ${email} — profile saved`);
+    
+    // ✅ Send welcome SMS if profile is complete, daily digest opted in, and phone is verified
+    const profileComplete = !!(interests && interests.length > 0 && dorm);
+    const shouldSendWelcome = profileComplete && 
+                              dailyDigestOptIn && 
+                              phone && 
+                              !existingData.welcomeSmsSent;
+    
+    if (shouldSendWelcome) {
+      try {
+        console.log(`📱 [UpdateUser] Sending welcome SMS to ${phone} for ${email}`);
+        const welcomeMessage = `Welcome to TheMove! Your profile is set up and you're subscribed to daily digests. Text us anytime to search for campus events! Reply STOP to unsubscribe.`;
+        
+        await twilioClient.messages.create({
+          body: welcomeMessage,
+          from: process.env.TWILIO_PHONE_NUMBER || "+14244478183",
+          to: phone,
+        });
+        
+        // Mark welcome SMS as sent
+        await db.collection("users").doc(finalUid).update({
+          welcomeSmsSent: true,
+          welcomeSmsSentAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        console.log(`✅ [UpdateUser] Welcome SMS sent successfully to ${phone}`);
+      } catch (welcomeErr) {
+        console.error("❌ [UpdateUser] Error sending welcome SMS:", welcomeErr);
+        // Don't fail the request if welcome SMS fails
+      }
+    }
+    
     res.json({ success: true, message: "Profile updated successfully" });
   } catch (err) {
     console.error("❌ Error updating user:", err);
