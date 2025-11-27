@@ -938,9 +938,9 @@ async function searchPostersForSMS(query, school) {
       eventLine += ` @ ${location}`;
     }
     
-    // Short URL: usethemove.com/p/XXXX (using first 4 chars of ID, uppercase for consistency)
-    const shortId = shortenPosterId(match.id).toUpperCase();
-    eventLine += `: ${shortUrl}/p/${shortId}`;
+    // Use full poster ID in URL (more reliable than short prefix lookup)
+    // Full URL is still compact: usethemove.com/poster/FullID
+    eventLine += `: ${shortUrl}/poster/${match.id}`;
     
     msg += eventLine;
     
