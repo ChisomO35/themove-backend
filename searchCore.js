@@ -751,22 +751,117 @@ async function searchPostersForSMS(query, school) {
   let sorted;
   
   if (targetDate) {
-    // Date-specific query: show ALL events on that date, sorted by time (earliest first)
-    console.log(`📅 [Date Query] Skipping semantic similarity ranking - showing ALL events on date`);
-    sorted = filtered.map((match) => {
-      // Use time for sorting if available, otherwise use title
-      const time = match.metadata.time_normalized_start || "99:99"; // Put events without time at end
-      return {
-        ...match,
-        enhancedScore: 1.0, // All events on the requested date are equally relevant
-        sortKey: time + (match.metadata.title || "").toLowerCase() // Sort by time, then title
-      };
-    }).sort((a, b) => {
-      // Sort by time (earliest first), then by title
-      if (a.sortKey < b.sortKey) return -1;
-      if (a.sortKey > b.sortKey) return 1;
-      return 0;
-    });
+    // Date-specific query: Check if there's also an activity filter
+    const hasActivityFilter = activityType || costIntent || queryWords.length > 0;
+    
+    if (hasActivityFilter) {
+      // Date + activity query: Apply semantic ranking but filter by date first
+      console.log(`📅 [Date + Activity Query] Filtering by date AND applying semantic ranking`);
+      const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+      
+      const enhancedResults = filtered.map((match) => {
+        let enhancedScore = match.score;
+        let boostReasons = [];
+        
+        // Apply same ranking logic as general queries
+        const titleLower = (match.metadata.title || "").toLowerCase();
+        const titleWords = titleLower.split(/\s+/);
+        const titleMatchCount = queryWords.filter(qw => 
+          titleWords.some(tw => tw.includes(qw) || qw.includes(tw))
+        ).length;
+        if (titleMatchCount > 0) {
+          const titleBoost = Math.min(0.15, titleMatchCount * 0.05);
+          enhancedScore = Math.min(1.0, enhancedScore + titleBoost);
+          if (titleBoost > 0.05) boostReasons.push("title");
+        }
+        
+        // Tag match boost
+        if (match.metadata.tags) {
+          const tags = match.metadata.tags.toLowerCase().split(", ").map(t => t.trim());
+          const tagMatchCount = queryWords.filter(qw => 
+            tags.some(tag => tag.includes(qw) || qw.includes(tag) || tag === qw)
+          ).length;
+          if (tagMatchCount > 0) {
+            const tagBoost = Math.min(0.12, tagMatchCount * 0.04);
+            enhancedScore = Math.min(1.0, enhancedScore + tagBoost);
+            if (tagBoost > 0.04) boostReasons.push("tag");
+          }
+          
+          if (activityType) {
+            const activityLower = activityType.toLowerCase();
+            const hasExactMatch = tags.some(tag => {
+              return tag === activityLower || 
+                     tag.includes(activityLower) || 
+                     activityLower.includes(tag);
+            });
+            if (hasExactMatch) {
+              enhancedScore = Math.min(1.0, enhancedScore + 0.1);
+              boostReasons.push("activity");
+            }
+          }
+        }
+        
+        // Category match boost
+        if (match.metadata.categories) {
+          const categories = match.metadata.categories.toLowerCase().split(", ").map(c => c.trim());
+          const categoryMatchCount = queryWords.filter(qw => 
+            categories.some(cat => cat.includes(qw) || qw.includes(cat))
+          ).length;
+          if (categoryMatchCount > 0) {
+            const catBoost = Math.min(0.08, categoryMatchCount * 0.03);
+            enhancedScore = Math.min(1.0, enhancedScore + catBoost);
+            if (catBoost > 0.03) boostReasons.push("category");
+          }
+        }
+        
+        // Free event boost
+        if (costIntent === "free") {
+          const cost = (match.metadata.cost || "").toLowerCase();
+          if (cost.includes("free") || cost.includes("no cost") || cost === "" || cost === "$0") {
+            enhancedScore = Math.min(1.0, enhancedScore + 0.06);
+            boostReasons.push("free");
+          }
+        }
+        
+        return {
+          ...match,
+          enhancedScore: enhancedScore,
+          boostReasons: boostReasons
+        };
+      });
+      
+      // Filter by quality threshold (lower for date+activity queries)
+      const qualityFiltered = enhancedResults.filter(m => m.enhancedScore >= 0.4);
+      console.log(`🔍 [Date + Activity] Quality filter: ${enhancedResults.length} before, ${qualityFiltered.length} after`);
+      
+      // Sort by score, then by time
+      sorted = qualityFiltered.sort((a, b) => {
+        if (b.enhancedScore !== a.enhancedScore) {
+          return b.enhancedScore - a.enhancedScore;
+        }
+        // If scores are equal, sort by time
+        const timeA = a.metadata.time_normalized_start || "99:99";
+        const timeB = b.metadata.time_normalized_start || "99:99";
+        return timeA.localeCompare(timeB);
+      });
+    } else {
+      // Pure date query: show ALL events on that date, sorted by time (earliest first)
+      console.log(`📅 [Date Query] No activity filter - showing ALL events on date`);
+      sorted = filtered.map((match) => {
+        // Use time for sorting if available, otherwise use title
+        const time = match.metadata.time_normalized_start || "99:99"; // Put events without time at end
+        return {
+          ...match,
+          enhancedScore: 1.0, // All events on the requested date are equally relevant
+          sortKey: time + (match.metadata.title || "").toLowerCase() // Sort by time, then title
+        };
+      }).sort((a, b) => {
+        // Sort by time (earliest first), then by title
+        if (a.sortKey < b.sortKey) return -1;
+        if (a.sortKey > b.sortKey) return 1;
+        return 0;
+      });
+    }
   } else {
     // General query: apply semantic ranking
     // Detect if this is a single-word activity query (e.g., "basketball", "yoga", "poker")
