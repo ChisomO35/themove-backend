@@ -1110,7 +1110,7 @@ async function searchPostersForSMS(query, school) {
   }
 
   // ✅ ULTRA-OPTIMIZED SMS formatting - NO EMOJIS, <160 chars per message to fit in 1 segment
-  // Format: "1) Title – Date Time @ Location: shorturl"
+  // Format: "TheMove\n\n1) Title – Date Time @ Location: shorturl"
   const shortUrl = BASE_URL.replace(/^https?:\/\//, '').replace(/^www\./, '');
   
   // Helper to format date compactly: "Sun 11/30" instead of "Sun, Nov 30"
@@ -1133,9 +1133,9 @@ async function searchPostersForSMS(query, school) {
     return id.substring(0, 4);
   }
   
-  let msg = '';
+  let msg = 'TheMove\n\n';
   const MAX_CHARS_2_SEGMENTS = 300; // Leave 20 chars buffer for safety (320 max = 2 segments)
-  let totalChars = 0;
+  let totalChars = msg.length; // Start with header length
   let eventsAdded = 0;
   const totalFound = filtered.length; // Total events found before limiting
   

@@ -86,7 +86,7 @@ function formatCompactTime(timeStr) {
 // --- Format events for SMS (same format as searchCore.js) ---
 function formatEventsForSMS(matches, baseUrl) {
   const shortUrl = baseUrl.replace(/^https?:\/\//, '').replace(/^www\./, '');
-  let msg = 'DailyDigest\n\n'; // Header
+  let msg = 'TheMove Daily Digest:\n\n'; // Header
   const MAX_CHARS_2_SEGMENTS = 300; // 2 segments max
   let totalChars = msg.length;
   let eventsAdded = 0;
