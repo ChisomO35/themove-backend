@@ -449,6 +449,8 @@ function extractTimeRange(query) {
 // Core search for SMS
 // ==========================================================
 async function searchPostersForSMS(query, school) {
+  // ✅ VERSION CHECK: If you see this log, the new emoji-free code is running
+  console.log(`🚀 [searchPostersForSMS] CODE VERSION: v2.0 - NO EMOJIS (GSM-7 optimized) - Deployed: ${new Date().toISOString()}`);
   console.log(`🔍 [searchPostersForSMS] Starting search for: "${query}" in ${school}`);
   try {
     const today = getLocalDate();
@@ -872,24 +874,20 @@ async function searchPostersForSMS(query, school) {
     } else if (timeRange || targetTime) {
       suggestion = "Try a different time or check what's happening this week!";
     }
-    return `🙁 I couldn't find any upcoming events that match. ${suggestion}`;
+    return `I couldn't find any upcoming events that match. ${suggestion}`;
   }
 
-  // ✅ Clean SMS formatting with emojis - optimized for mobile readability and carrier limits
-  let msg = `🎯 Found ${topResults.length} ${topResults.length === 1 ? 'match' : 'matches'}:\n\n`;
+  // ✅ Optimized SMS formatting - NO EMOJIS to force GSM-7 encoding (160 chars/segment vs 70)
+  // Compact format to minimize segments and costs
+  const shortUrl = BASE_URL.replace(/^https?:\/\//, '').replace(/^www\./, '');
+  let msg = `Found ${topResults.length} ${topResults.length === 1 ? 'event' : 'events'}:\n\n`;
   
   topResults.forEach((match, i) => {
-    // Number and title with emoji
-    msg += `${i + 1}️⃣ ${match.metadata.title}\n`;
+    // Number and title - no emoji
+    msg += `${i + 1}) ${match.metadata.title}\n`;
     
-    // Organization name (if different from title) - make it more compact
-    if (match.metadata.organization_name && 
-        match.metadata.organization_name.toLowerCase() !== match.metadata.title.toLowerCase()) {
-      msg += `by ${match.metadata.organization_name}\n`;
-    }
-    
-    // Date and time (compact format with emojis) - combine on one line
-    const dateTimeParts = [];
+    // Date, time, and location on one line - compact format
+    const parts = [];
     if (match.metadata.date_normalized) {
       const eventDate = getLocalDateFromISO(match.metadata.date_normalized);
       if (eventDate) {
@@ -898,45 +896,48 @@ async function searchPostersForSMS(query, school) {
           month: "short",
           day: "numeric"
         });
-        dateTimeParts.push(`📅 ${dateStr}`);
+        parts.push(dateStr);
       }
     }
     if (match.metadata.time) {
-      dateTimeParts.push(`🕐 ${match.metadata.time}`);
+      // Convert time to 12-hour format if needed, or keep as-is
+      parts.push(match.metadata.time);
     }
-    if (dateTimeParts.length > 0) {
-      msg += `${dateTimeParts.join(' • ')}\n`;
-    }
-    
-    // Location (if available) - compact
     if (match.metadata.location) {
-      msg += `📍 ${match.metadata.location}\n`;
+      parts.push(`@ ${match.metadata.location}`);
+    }
+    if (parts.length > 0) {
+      msg += `${parts.join(' ')}\n`;
     }
     
-    // Cost (if available) - only show if not free or if explicitly mentioned
+    // Cost - only if not free
     const cost = (match.metadata.cost || "").trim();
     if (cost) {
       const costLower = cost.toLowerCase();
-      if (costLower.includes("free") || costLower.includes("no cost") || 
-          costLower.includes("complimentary") || cost === "$0" || cost === "0") {
-        msg += `💰 Free\n`;
-      } else {
-        msg += `💰 ${cost}\n`;
+      if (!costLower.includes("free") && !costLower.includes("no cost") && 
+          !costLower.includes("complimentary") && cost !== "$0" && cost !== "0") {
+        msg += `${cost}\n`;
       }
     }
     
-    // Tags - removed to save space (users can click link for more info)
-    // Link with emoji - shortened URL if possible
-    msg += `🔗 ${BASE_URL}/poster/${match.id}`;
+    // Descriptive text with URL - carriers will make URL clickable
+    msg += `View Poster: ${shortUrl}/poster/${match.id}`;
     
-    // Spacing between results - double line break
+    // Single line break between results
     if (i < topResults.length - 1) {
       msg += `\n\n`;
     }
   });
 
-    console.log(`✅ [searchPostersForSMS] Returning message, length: ${msg.trim().length}`);
-    return msg.trim();
+    const finalMsg = msg.trim();
+    console.log(`✅ [searchPostersForSMS] Returning message, length: ${finalMsg.length}`);
+    console.log(`✅ [searchPostersForSMS] Message preview (first 200 chars): ${finalMsg.substring(0, 200)}`);
+    // Verify no emojis in message
+    const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu;
+    if (emojiRegex.test(finalMsg)) {
+      console.error(`❌ [searchPostersForSMS] WARNING: Message contains emojis! This will cause UCS-2 encoding.`);
+    }
+    return finalMsg;
   } catch (err) {
     console.error("❌ [searchPostersForSMS] Error:", err);
     console.error("❌ [searchPostersForSMS] Error stack:", err.stack);
