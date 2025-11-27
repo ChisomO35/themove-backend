@@ -1161,6 +1161,7 @@ app.post("/sms", async (req, res) => {
   }
 
   // Helper function to handle search (shared for registered and non-registered)
+  // Returns the reply message as a string (doesn't add to TwiML directly)
   async function handleSearch(query, school, twimlResponse) {
     console.log(`🔍 [SMS Handler] Starting search for: "${query}" in ${school}`);
     let reply = null;
@@ -1236,6 +1237,9 @@ app.post("/sms", async (req, res) => {
     } else {
       twimlResponse.message(reply);
     }
+    
+    // Return the reply so caller can check if results were returned
+    return reply;
   }
 
   // Helper function to send response

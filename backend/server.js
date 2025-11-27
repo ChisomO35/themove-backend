@@ -1559,23 +1559,38 @@ app.post("/sms", async (req, res) => {
     } else if (intent === "random") {
       twiml.message("Try asking about campus events 🙂");
     } else {
-      // Perform search and increment count
+      // Perform search
       console.log(`📱 SMS received: "${incomingRaw}" from non-registered user ${from} (${searchCount}/3 searches)`);
-      await handleSearch(incomingRaw, smsSession.school, twiml);
       
-      // Increment search count
-      const newCount = searchCount + 1;
-      await db.collection("smsSessions").doc(smsSession.id).update({
-        searchCount: newCount,
-        lastSearchAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+      // Get the reply from handleSearch
+      const reply = await handleSearch(incomingRaw, smsSession.school, twiml);
       
-      // Only show message if limit reached
-      if (newCount >= 3) {
-        twiml.message(`🚫 You've reached your 3-search limit. Sign up for FREE at https://www.usethemove.com/signup to continue!`);
+      // ✅ Only increment search count if actual events were returned
+      // Check if reply contains event results (starts with "1) " or contains event format)
+      // Exclude "I couldn't find" and error messages
+      const hasResults = reply && 
+        !reply.startsWith("I couldn't find") && 
+        !reply.startsWith("Sorry, I'm having trouble") &&
+        !reply.startsWith("Sorry, something went wrong") &&
+        (reply.match(/^\d+\)\s/) || reply.includes('@') || reply.includes('usethemove.com'));
+      
+      if (hasResults) {
+        // Increment search count only if results were returned
+        const newCount = searchCount + 1;
+        await db.collection("smsSessions").doc(smsSession.id).update({
+          searchCount: newCount,
+          lastSearchAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Only show message if limit reached
+        if (newCount >= 3) {
+          twiml.message(`🚫 You've reached your 3-search limit. Sign up for FREE at https://www.usethemove.com/signup to continue!`);
+        }
+        
+        console.log(`✅ [SMS Handler] Search count updated to ${newCount}/3 for ${from} (results returned)`);
+      } else {
+        console.log(`⏭️ [SMS Handler] Search count NOT incremented for ${from} (no results returned)`);
       }
-      
-      console.log(`✅ [SMS Handler] Search count updated to ${newCount}/3 for ${from}`);
     }
 
     sendResponse();
