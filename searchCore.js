@@ -17,6 +17,14 @@ function addDays(date, n) {
   return d;
 }
 
+// Convert local date to ISO string (YYYY-MM-DD) without timezone conversion
+function localDateToISO(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function getLocalDateFromISO(iso) {
   const [yyyy, mm, dd] = iso.split("-");
   return new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
@@ -143,7 +151,7 @@ function extractExactTime(query) {
 async function extractExactDate(query) {
   const today = getLocalDate();
   const lower = query.toLowerCase();
-  const localISO = today.toISOString().slice(0, 10);
+  const localISO = localDateToISO(today);
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth() + 1; // 1-12
 
@@ -584,7 +592,7 @@ async function searchPostersForSMS(query, school) {
 
   // ✅ Use Pinecone metadata filters for better performance
   const schoolNormalized = school.toLowerCase().replace(/[\s-]+/g, "");
-  const todayISO = today.toISOString().slice(0, 10);
+  const todayISO = localDateToISO(today);
   
   // Build filter object
   const filter = {
@@ -594,9 +602,10 @@ async function searchPostersForSMS(query, school) {
 
   // Add date filter if we have a target date
   if (targetDate) {
-    const targetISO = targetDate.toISOString().slice(0, 10);
+    // Use localDateToISO to avoid timezone conversion issues
+    const targetISO = localDateToISO(targetDate);
     filter.date_normalized = targetISO;
-    console.log(`📅 Filtering by date: ${targetISO}`);
+    console.log(`📅 Filtering by date: ${targetISO} (today is ${localDateToISO(today)})`);
   } else {
     // Filter out past events at query time (but allow events without dates)
     // Note: Pinecone doesn't support OR filters easily, so we'll filter past events in JS
