@@ -750,9 +750,15 @@ async function searchPostersForSMS(query, school) {
   // For general queries, apply hyper-accurate ranking with multiple signals
   let sorted;
   
+  // Check if there's an activity filter (needed for both date and non-date queries)
+  const queryWordsForActivity = queryLower.split(/\s+/).filter(w => w.length > 2);
+  const hasActivityFilter = activityType || costIntent || (queryWordsForActivity.length > 0 && 
+    !queryLower.includes("what") && !queryLower.includes("happening") && 
+    !queryLower.includes("events") && !queryLower.includes("today") && 
+    !queryLower.includes("tomorrow") && !queryLower.includes("weekend"));
+  
   if (targetDate) {
     // Date-specific query: Check if there's also an activity filter
-    const hasActivityFilter = activityType || costIntent || queryWords.length > 0;
     
     if (hasActivityFilter) {
       // Date + activity query: Apply semantic ranking but filter by date first
@@ -1016,11 +1022,26 @@ async function searchPostersForSMS(query, school) {
     }
   }
   
-  // ✅ Apply diversity: max 1 per organization if we have many results
+  // ✅ Apply deduplication and diversity: max 1 per organization if we have many results
+  // First, deduplicate by event ID (same event should never appear twice)
+  const seenIds = new Set();
+  const deduplicated = sorted.filter(result => {
+    if (seenIds.has(result.id)) {
+      console.log(`⚠️  [Deduplication] Skipping duplicate event: ${result.metadata.title} (ID: ${result.id})`);
+      return false;
+    }
+    seenIds.add(result.id);
+    return true;
+  });
+  
   let finalResults = [];
-  if (resultCount >= 3 && sorted.length > 3) {
+  if (targetDate && !hasActivityFilter) {
+    // Pure date query: show ALL unique results (no diversity filter, no limit)
+    finalResults = deduplicated;
+    console.log(`📅 [Date Query] Showing ${finalResults.length} unique events on requested date (deduplicated from ${sorted.length})`);
+  } else if (resultCount >= 3 && deduplicated.length > 3) {
     const orgsSeen = new Set();
-    for (const result of sorted) {
+    for (const result of deduplicated) {
       if (finalResults.length >= resultCount) break;
       
       const org = result.metadata.organization_name || "";
@@ -1030,13 +1051,13 @@ async function searchPostersForSMS(query, school) {
       }
     }
     // If we don't have enough after diversity filter, fill with remaining
-    while (finalResults.length < resultCount && finalResults.length < sorted.length) {
-      const remaining = sorted.find(r => !finalResults.includes(r));
+    while (finalResults.length < resultCount && finalResults.length < deduplicated.length) {
+      const remaining = deduplicated.find(r => !finalResults.some(fr => fr.id === r.id));
       if (remaining) finalResults.push(remaining);
       else break;
     }
   } else {
-    finalResults = sorted.slice(0, resultCount);
+    finalResults = deduplicated.slice(0, resultCount);
   }
   
   const topResults = finalResults;
