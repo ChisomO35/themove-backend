@@ -1011,12 +1011,16 @@ async function searchPostersForSMS(query, school) {
   }
   
   // ✅ Adaptive result count based on quality
-  // For date-specific queries, show ALL results (no limit)
+  // For date-specific queries, limit to fit in 2 segments max (320 chars)
   let resultCount;
-  if (targetDate) {
-    // For date queries, show ALL events on that date
-    resultCount = sorted.length;
-    console.log(`📅 [Date Query] Showing ALL ${resultCount} events on requested date`);
+  if (targetDate && !hasActivityFilter) {
+    // Pure date query: Limit to 3 events max (fits in ~300 chars, under 2 segments)
+    resultCount = Math.min(3, sorted.length);
+    console.log(`📅 [Date Query] Limiting to ${resultCount} events to stay under 2 segments (320 chars max)`);
+  } else if (targetDate) {
+    // Date + activity query: limit to 5 events
+    resultCount = Math.min(5, sorted.length);
+    console.log(`📅 [Date + Activity Query] Showing ${resultCount} events`);
   } else {
     resultCount = 3; // Default for general queries
     if (sorted.length > 0) {
@@ -1049,9 +1053,14 @@ async function searchPostersForSMS(query, school) {
   
   let finalResults = [];
   if (targetDate && !hasActivityFilter) {
-    // Pure date query: show ALL unique results (no diversity filter, no limit)
-    finalResults = deduplicated;
-    console.log(`📅 [Date Query] Showing ${finalResults.length} unique events on requested date (deduplicated from ${sorted.length})`);
+    // Pure date query: Limit to resultCount (already set to max 3 above)
+    finalResults = deduplicated.slice(0, resultCount);
+    const totalFound = deduplicated.length;
+    if (totalFound > resultCount) {
+      console.log(`📅 [Date Query] Found ${totalFound} events, limiting to top ${resultCount} to stay under 2 segments`);
+    } else {
+      console.log(`📅 [Date Query] Showing ${finalResults.length} unique events on requested date`);
+    }
   } else if (resultCount >= 3 && deduplicated.length > 3) {
     const orgsSeen = new Set();
     for (const result of deduplicated) {
@@ -1122,6 +1131,10 @@ async function searchPostersForSMS(query, school) {
   }
   
   let msg = '';
+  const MAX_CHARS_2_SEGMENTS = 300; // Leave 20 chars buffer for safety (320 max = 2 segments)
+  let totalChars = 0;
+  let eventsAdded = 0;
+  const totalFound = targetDate && !hasActivityFilter ? filtered.length : topResults.length;
   
   topResults.forEach((match, i) => {
     // Build compact event line: "1) Title – Date Time @ Location: url"
@@ -1162,13 +1175,28 @@ async function searchPostersForSMS(query, school) {
     // Full URL is still compact: usethemove.com/poster/FullID
     eventLine += `: ${shortUrl}/poster/${match.id}`;
     
-    msg += eventLine;
+    // Check if adding this event would exceed 2-segment limit (for pure date queries)
+    const spacing = eventsAdded > 0 ? '\n\n' : '';
+    const testLength = totalChars + spacing.length + eventLine.length;
     
-    // Add spacing between results (single line break to save chars but still readable)
-    if (i < topResults.length - 1) {
-      msg += '\n\n';
+    if (targetDate && !hasActivityFilter && testLength > MAX_CHARS_2_SEGMENTS) {
+      console.log(`📅 [Date Query] Stopping at ${eventsAdded} events (would be ${testLength} chars, limit: ${MAX_CHARS_2_SEGMENTS})`);
+      return; // Stop adding events to stay under 2 segments
     }
+    
+    msg += spacing + eventLine;
+    totalChars = msg.length;
+    eventsAdded++;
   });
+  
+  // Add note if results were limited for pure date queries
+  if (targetDate && !hasActivityFilter && totalFound > eventsAdded) {
+    const note = `\n\n(Showing ${eventsAdded} of ${totalFound}. Be more specific!)`;
+    // Check if note would push us over limit
+    if (totalChars + note.length <= MAX_CHARS_2_SEGMENTS) {
+      msg += note;
+    }
+  }
   
   // Remove the "Found X events:" header to save characters - just show the events
   // The message is now just the event list, which should be <160 chars for 1-2 events
