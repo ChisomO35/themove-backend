@@ -8,7 +8,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "generate-test-data": "node generateTestData.js",
     "test-searches": "node testSearches.js",
-    "test-digest": "node testDailyDigest.js"
+    "test-digest": "node testDailyDigest.js",
+    "test-comprehensive": "node comprehensiveSearchTests.js"
   },
   "keywords": [],
   "author": "",

@@ -503,18 +503,24 @@ async function searchPostersForSMS(query, school) {
   const queryLower = query.toLowerCase();
   let synonymExpanded = query;
   
-  // Add synonyms for common terms
+  // Add synonyms for common terms - EXPANDED for better matching
   const synonyms = {
-    "free": ["free", "no cost", "complimentary", "no charge", "gratis"],
-    "pizza": ["pizza", "food", "free food", "meal"],
-    "study": ["study", "studying", "academic", "homework", "learning"],
-    "networking": ["networking", "professional", "career", "connections", "meet people"],
-    "concert": ["concert", "music", "performance", "show", "live music"],
-    "poker": ["poker", "card games", "games", "gaming", "tournament"],
-    "yoga": ["yoga", "fitness", "wellness", "exercise", "mindfulness"],
-    "basketball": ["basketball", "sports", "athletics", "game", "tournament"],
-    "volunteer": ["volunteer", "volunteering", "community service", "service", "help"],
-    "career": ["career", "job", "employment", "professional", "work"],
+    "free": ["free", "no cost", "complimentary", "no charge", "gratis", "zero cost"],
+    "pizza": ["pizza", "food", "free food", "meal", "snacks", "refreshments", "catered"],
+    "food": ["food", "pizza", "tacos", "brunch", "lunch", "dinner", "snacks", "refreshments", "meal", "catered", "festival"],
+    "study": ["study", "studying", "academic", "homework", "learning", "review", "exam prep"],
+    "networking": ["networking", "professional", "career", "connections", "meet people", "industry", "employers"],
+    "concert": ["concert", "music", "performance", "show", "live music", "musical", "gig"],
+    "music": ["music", "concert", "performance", "show", "live music", "musical", "gig", "open mic", "jam session"],
+    "poker": ["poker", "card games", "games", "gaming", "tournament", "cards", "casino night"],
+    "yoga": ["yoga", "fitness", "wellness", "exercise", "mindfulness", "meditation", "stretching"],
+    "basketball": ["basketball", "sports", "athletics", "game", "tournament", "hoops", "b-ball"],
+    "sports": ["sports", "athletics", "fitness", "competition", "tournament", "game", "games"],
+    "volunteer": ["volunteer", "volunteering", "community service", "service", "help", "outreach", "charity"],
+    "career": ["career", "job", "employment", "professional", "work", "internship", "hiring"],
+    "workshop": ["workshop", "class", "training", "tutorial", "session", "seminar"],
+    "cultural": ["cultural", "diversity", "international", "heritage", "tradition"],
+    "social": ["social", "meetup", "gathering", "hangout", "community", "friends"],
   };
   
   // Expand query with synonyms
@@ -762,20 +768,32 @@ async function searchPostersForSMS(query, school) {
     const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
     
     const enhancedResults = filtered.map((match) => {
-    let enhancedScore = match.score;
-    let boostReasons = [];
-    
-    // 1. Title match boost (strongest signal)
-    const titleLower = (match.metadata.title || "").toLowerCase();
-    const titleWords = titleLower.split(/\s+/);
-    const titleMatchCount = queryWords.filter(qw => 
-      titleWords.some(tw => tw.includes(qw) || qw.includes(tw))
-    ).length;
-    if (titleMatchCount > 0) {
-      const titleBoost = Math.min(0.15, titleMatchCount * 0.05);
-      enhancedScore = Math.min(1.0, enhancedScore + titleBoost);
-      if (titleBoost > 0.05) boostReasons.push("title");
-    }
+      let enhancedScore = match.score;
+      let boostReasons = [];
+      
+      // 1. Title match boost (strongest signal)
+      // For single-word queries, give much stronger boost if word appears in title
+      const titleLower = (match.metadata.title || "").toLowerCase();
+      const titleWords = titleLower.split(/\s+/);
+      
+      if (isSingleWordActivityQuery) {
+        // For single-word queries, check if query word appears in title (exact or partial)
+        const queryWord = queryLower.trim();
+        if (titleLower.includes(queryWord)) {
+          // Strong boost for single-word title matches
+          enhancedScore = Math.min(1.0, enhancedScore + 0.25);
+          boostReasons.push("single-word-title-match");
+        }
+      }
+      
+      const titleMatchCount = queryWords.filter(tw => 
+        queryWords.some(qw => tw.includes(qw) || qw.includes(tw))
+      ).length;
+      if (titleMatchCount > 0) {
+        const titleBoost = Math.min(0.15, titleMatchCount * 0.05);
+        enhancedScore = Math.min(1.0, enhancedScore + titleBoost);
+        if (titleBoost > 0.05) boostReasons.push("title");
+      }
     
     // 2. Tag match boost (very strong)
     if (match.metadata.tags) {
