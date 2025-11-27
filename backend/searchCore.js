@@ -927,20 +927,8 @@ async function searchPostersForSMS(query, school) {
       dateTimeParts.push(formatCompactTime(match.metadata.time));
     }
     
-    // Location - abbreviate common locations
-    let location = match.metadata.location || '';
-    const locationAbbrevs = {
-      'Student Union': 'SU',
-      'Memorial Hall': 'Mem Hall',
-      'Carolina Union': 'Union',
-      'Franklin Street': 'Franklin St'
-    };
-    for (const [full, abbrev] of Object.entries(locationAbbrevs)) {
-      if (location.includes(full)) {
-        location = location.replace(full, abbrev);
-        break;
-      }
-    }
+    // Location - keep full name (no abbreviations)
+    const location = match.metadata.location || '';
     
     // Build the compact line
     if (dateTimeParts.length > 0) {
