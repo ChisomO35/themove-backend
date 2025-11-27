@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <title>TheMove - Contact Us</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Poppins", "sans-serif"] },
+            colors: {
+              primary: "#4F46E5",
+              accent: "#6366F1",
+              background: "#FAFAFA",
+              dark: "#1E1B4B",
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="bg-background font-sans text-gray-800 flex flex-col min-h-screen">
+    <!-- ✅ Navbar -->
+    <header class="navbar">
+      <div class="navbar-container">
+        <a href="/" class="navbar-logo">TheMove</a>
+        <button class="navbar-mobile-toggle" id="mobileMenuToggle" aria-label="Toggle menu">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </button>
+        <nav class="navbar-nav" id="navbarNav">
+          <a href="/" class="navbar-link hidden md:inline-block">Home</a>
+          <a href="/contact" class="navbar-link hidden md:inline-block">Contact</a>
+          <a href="/login" class="btn btn-secondary">Login</a>
+          <a href="/signup" class="btn btn-primary">Join</a>
+        </nav>
+      </div>
+    </header>
+    <script>
+      document.getElementById('mobileMenuToggle')?.addEventListener('click', () => {
+        document.getElementById('navbarNav')?.classList.toggle('open');
+      });
+    </script>
+
+    <!-- ✅ Main Content -->
+    <main class="flex-grow flex items-center justify-center py-12 px-4">
+      <div class="container container-sm">
+        <div class="card max-w-md mx-auto fade-in text-center">
+          <h1 class="heading-2 mb-2">📧 Contact Us</h1>
+          <p class="text-muted mb-8">Have a question or feedback? We'd love to hear from you!</p>
+
+          <div class="space-y-6">
+            <div>
+              <h2 class="text-xl font-semibold text-dark mb-4">Get in touch</h2>
+              <a 
+                href="mailto:support@usethemove.com" 
+                class="text-2xl font-semibold text-primary hover:text-indigo-700 transition underline"
+              >
+                support@usethemove.com
+              </a>
+            </div>
+
+            <div class="pt-6 border-t border-gray-200">
+              <p class="text-gray-600 mb-2">
+                <strong>Response Time:</strong> We typically respond within 24-48 hours
+              </p>
+              <p class="text-sm text-gray-500">
+                For SMS-related questions, reply <strong>HELP</strong> to any TheMove text message.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ✅ Footer -->
+    <footer class="mt-auto bg-white py-8 text-center border-t border-gray-200">
+      <div class="container">
+        <div class="mb-4">
+          <span class="font-semibold text-primary text-lg">TheMove</span>
+          <p class="text-muted mt-2">Your AI Campus Discovery Platform</p>
+        </div>
+        <div class="flex justify-center gap-6 mb-4">
+          <a href="/contact" class="text-gray-600 hover:text-primary transition">Contact</a>
+          <a href="/" class="text-gray-600 hover:text-primary transition">Home</a>
+        </div>
+        <p class="text-muted">© 2025 TheMove. Made with 🩵 at UNC.</p>
+      </div>
+    </footer>
+  </body>
+</html>
+
