@@ -657,12 +657,23 @@ async function searchPostersForSMS(query, school) {
     });
   } else if (targetDate) {
     const targetISO = localDateToISO(targetDate);
+    console.log(`🔍 [Date Filter] Filtering ${filtered.length} results for date: ${targetISO}`);
     filtered = filtered.filter((m) => {
       const eventDate = m.metadata.date_normalized;
-      if (!eventDate) return false; // Exclude events without dates when filtering by date
+      if (!eventDate) {
+        console.log(`   ⚠️  Event "${m.metadata.title}" has no date_normalized`);
+        return false; // Exclude events without dates when filtering by date
+      }
       // Compare ISO strings directly (they're already in YYYY-MM-DD format)
-      return eventDate === targetISO;
+      const matches = eventDate === targetISO;
+      if (!matches) {
+        console.log(`   ⚠️  Event "${m.metadata.title}" date mismatch: ${eventDate} !== ${targetISO}`);
+      } else {
+        console.log(`   ✅ Event "${m.metadata.title}" matches date: ${eventDate}`);
+      }
+      return matches;
     });
+    console.log(`✅ [Date Filter] After filtering: ${filtered.length} results remain`);
   }
 
   // --- cost filter (if "free" mentioned) ---
@@ -824,17 +835,26 @@ async function searchPostersForSMS(query, school) {
     };
   });
   
-  // Filter by minimum quality threshold (0.5)
-  const qualityFiltered = enhancedResults.filter(m => m.enhancedScore >= 0.5);
+  // Filter by minimum quality threshold
+  // Lower threshold (0.4) for date-specific queries since semantic similarity may be low
+  // but the user explicitly wants events on that date
+  const minThreshold = targetDate ? 0.4 : 0.5;
+  const qualityFiltered = enhancedResults.filter(m => m.enhancedScore >= minThreshold);
+  console.log(`🔍 [Quality Filter] Using threshold: ${minThreshold}, ${enhancedResults.length} results before, ${qualityFiltered.length} after`);
   
   // Sort by enhanced score
   const sorted = qualityFiltered.sort((a, b) => b.enhancedScore - a.enhancedScore);
   
   // ✅ Adaptive result count based on quality
-  let resultCount = 3; // Default
+  // For date-specific queries, show more results since user explicitly asked for that date
+  let resultCount = targetDate ? 5 : 3; // Default: 5 for date queries, 3 for general
   if (sorted.length > 0) {
     const topScore = sorted[0].enhancedScore;
-    if (topScore > 0.8 && sorted.length >= 5) {
+    if (targetDate) {
+      // For date queries, be more generous - show up to 5 results if available
+      resultCount = Math.min(5, sorted.length);
+      console.log(`📅 [Date Query] Showing ${resultCount} results for date-specific query`);
+    } else if (topScore > 0.8 && sorted.length >= 5) {
       resultCount = 5; // Show up to 5 if excellent matches
     } else if (topScore > 0.7 && sorted.length >= 4) {
       resultCount = 4; // Show up to 4 if very good matches
@@ -872,6 +892,13 @@ async function searchPostersForSMS(query, school) {
   
   const topResults = finalResults;
   console.log(`✅ Final results count: ${topResults.length}`);
+  if (topResults.length === 0 && filtered.length > 0) {
+    console.log(`⚠️  [WARNING] Filtered results exist (${filtered.length}) but finalResults is empty!`);
+    console.log(`   This suggests similarity score threshold or ranking logic filtered them out.`);
+    if (filtered.length > 0) {
+      console.log(`   Top filtered result: "${filtered[0].metadata.title}" (score: ${filtered[0].score})`);
+    }
+  }
 
   if (topResults.length === 0) {
     let suggestion = "Try asking in a different way or for another day!";
