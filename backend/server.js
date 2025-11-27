@@ -1381,6 +1381,46 @@ app.post("/sms", async (req, res) => {
     if (userData) {
       const school = userData.school || "UNC-Chapel Hill"; // fallback to default
       
+      // ✅ Check if profile setup is complete
+      const setupComplete = !!(userData.interests && userData.dorm);
+      if (!setupComplete) {
+        if (!incomingRaw) {
+          twiml.message("Please complete your profile setup at https://www.usethemove.com/setup to start searching!");
+          sendResponse();
+          return;
+        }
+        
+        // Check intent - allow info/signup, but block searches
+        let intent;
+        try {
+          intent = await Promise.race([
+            detectIntent(incomingRaw),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error("Intent detection timeout")), 10000)
+            )
+          ]);
+          console.log(`🎯 Intent detected: ${intent}`);
+        } catch (intentErr) {
+          console.error("❌ Intent detection error:", intentErr.message);
+          intent = "search";
+        }
+
+        if (intent === "info") {
+          twiml.message(
+            "I'm TheMove! Complete your profile setup at https://www.usethemove.com/setup to start searching for campus events!"
+          );
+        } else if (intent === "signup") {
+          twiml.message("You're already signed up! Complete your profile at https://www.usethemove.com/setup 🚀");
+        } else if (intent === "random") {
+          twiml.message("Complete your profile setup at https://www.usethemove.com/setup to start searching!");
+        } else {
+          // Block search - profile not complete
+          twiml.message("Please complete your profile setup at https://www.usethemove.com/setup to start searching for events!");
+        }
+        sendResponse();
+        return;
+      }
+      
       if (!incomingRaw) {
         twiml.message("Tell me what you're looking for on campus 🙂");
         sendResponse();
@@ -1490,8 +1530,7 @@ app.post("/sms", async (req, res) => {
     }
 
     if (!incomingRaw) {
-      const remaining = 3 - searchCount;
-      twiml.message(`Tell me what you're looking for on campus 🙂 (${remaining} search${remaining !== 1 ? 'es' : ''} left before signup)`);
+      twiml.message(`Tell me what you're looking for on campus 🙂`);
       sendResponse();
       return;
     }
@@ -1531,11 +1570,8 @@ app.post("/sms", async (req, res) => {
         lastSearchAt: admin.firestore.FieldValue.serverTimestamp()
       });
       
-      const remaining = 3 - newCount;
-      if (remaining > 0) {
-        // Add reminder about remaining searches
-        twiml.message(`(${remaining} search${remaining !== 1 ? 'es' : ''} left. Sign up at https://www.usethemove.com/signup for unlimited!)`);
-      } else {
+      // Only show message if limit reached
+      if (newCount >= 3) {
         twiml.message(`🚫 You've reached your 3-search limit. Sign up for FREE at https://www.usethemove.com/signup to continue!`);
       }
       
