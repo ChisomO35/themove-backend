@@ -1011,32 +1011,35 @@ async function searchPostersForSMS(query, school) {
   }
   
   // ✅ Adaptive result count based on quality
-  // For date-specific queries, limit to fit in 2 segments max (320 chars)
+  // ALL queries limited to 2 segments max (320 chars) for cost control
   let resultCount;
   if (targetDate && !hasActivityFilter) {
     // Pure date query: Limit to 3 events max (fits in ~300 chars, under 2 segments)
     resultCount = Math.min(3, sorted.length);
     console.log(`📅 [Date Query] Limiting to ${resultCount} events to stay under 2 segments (320 chars max)`);
   } else if (targetDate) {
-    // Date + activity query: limit to 5 events
-    resultCount = Math.min(5, sorted.length);
-    console.log(`📅 [Date + Activity Query] Showing ${resultCount} events`);
+    // Date + activity query: limit to 3 events (2 segments max)
+    resultCount = Math.min(3, sorted.length);
+    console.log(`📅 [Date + Activity Query] Limiting to ${resultCount} events to stay under 2 segments`);
   } else {
-    resultCount = 3; // Default for general queries
+    // General queries: limit to 3 events max (2 segments max)
+    resultCount = Math.min(3, sorted.length);
     if (sorted.length > 0) {
       const topScore = sorted[0].enhancedScore;
-      if (topScore > 0.8 && sorted.length >= 5) {
-        resultCount = 5; // Show up to 5 if excellent matches
-      } else if (topScore > 0.7 && sorted.length >= 4) {
-        resultCount = 4; // Show up to 4 if very good matches
+      // Still prioritize quality, but cap at 3 for cost control
+      if (topScore > 0.8 && sorted.length >= 3) {
+        resultCount = 3; // Show up to 3 if excellent matches
+      } else if (topScore > 0.7 && sorted.length >= 3) {
+        resultCount = 3; // Show up to 3 if very good matches
       } else if (topScore > 0.6 && sorted.length >= 3) {
-        resultCount = 3; // Show 3 if good matches
+        resultCount = 3; // Show up to 3 if good matches
       } else if (topScore > 0.5 && sorted.length >= 2) {
-        resultCount = 2; // Show 2 if decent matches
+        resultCount = Math.min(2, sorted.length); // Show 2 if decent matches
       } else {
         resultCount = Math.min(1, sorted.length); // Show 1 if weak matches
       }
     }
+    console.log(`🔍 [General Query] Limiting to ${resultCount} events to stay under 2 segments (320 chars max)`);
   }
   
   // ✅ Apply deduplication and diversity: max 1 per organization if we have many results
@@ -1134,7 +1137,7 @@ async function searchPostersForSMS(query, school) {
   const MAX_CHARS_2_SEGMENTS = 300; // Leave 20 chars buffer for safety (320 max = 2 segments)
   let totalChars = 0;
   let eventsAdded = 0;
-  const totalFound = targetDate && !hasActivityFilter ? filtered.length : topResults.length;
+  const totalFound = filtered.length; // Total events found before limiting
   
   topResults.forEach((match, i) => {
     // Build compact event line: "1) Title – Date Time @ Location: url"
@@ -1175,12 +1178,12 @@ async function searchPostersForSMS(query, school) {
     // Full URL is still compact: usethemove.com/poster/FullID
     eventLine += `: ${shortUrl}/poster/${match.id}`;
     
-    // Check if adding this event would exceed 2-segment limit (for pure date queries)
+    // Check if adding this event would exceed 2-segment limit (for ALL queries)
     const spacing = eventsAdded > 0 ? '\n\n' : '';
     const testLength = totalChars + spacing.length + eventLine.length;
     
-    if (targetDate && !hasActivityFilter && testLength > MAX_CHARS_2_SEGMENTS) {
-      console.log(`📅 [Date Query] Stopping at ${eventsAdded} events (would be ${testLength} chars, limit: ${MAX_CHARS_2_SEGMENTS})`);
+    if (testLength > MAX_CHARS_2_SEGMENTS) {
+      console.log(`📏 [SMS Limit] Stopping at ${eventsAdded} events (would be ${testLength} chars, limit: ${MAX_CHARS_2_SEGMENTS})`);
       return; // Stop adding events to stay under 2 segments
     }
     
@@ -1189,12 +1192,13 @@ async function searchPostersForSMS(query, school) {
     eventsAdded++;
   });
   
-  // Add note if results were limited for pure date queries
-  if (targetDate && !hasActivityFilter && totalFound > eventsAdded) {
+  // Add note if results were limited (for any query type)
+  if (totalFound > eventsAdded) {
     const note = `\n\n(Showing ${eventsAdded} of ${totalFound}. Be more specific!)`;
     // Check if note would push us over limit
     if (totalChars + note.length <= MAX_CHARS_2_SEGMENTS) {
       msg += note;
+      totalChars = msg.length;
     }
   }
   
