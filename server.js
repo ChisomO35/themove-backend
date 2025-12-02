@@ -65,7 +65,7 @@ const { detectIntent, searchPostersForSMS } = require("./searchCore");
 
 // ⭐️ NEW — import daily digest for cron scheduling
 const cron = require("node-cron");
-const { runDailyDigest } = require("./backend/dailyDigest");
+const { runDailyDigest } = require("./dailyDigest");
 
 // ⭐️ NEW — import auth helpers
 const {

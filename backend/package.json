@@ -24,8 +24,9 @@
     "express": "^5.1.0",
     "firebase-admin": "^13.6.0",
     "form-data": "^4.0.5",
-    "multer": "^2.0.2",
     "mailgun-js": "^0.22.0",
+    "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
     "openai": "^6.8.1",
     "sharp": "^0.34.5",
     "twilio": "^5.10.5"
