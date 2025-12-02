@@ -546,6 +546,61 @@ app.post("/extract", upload.single("poster"), async (req, res) => {
     const base64 = fs.readFileSync(compressedPath, { encoding: "base64" });
     const imageData = `data:image/jpeg;base64,${base64}`;
 
+    // ✅ Extract QR codes and links using OpenAI Vision
+    async function extractQRAndLinks(imageData) {
+      try {
+        const openai = getOpenAI();
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `This is a campus event poster. Extract the following information:
+1. If there's a QR code visible, extract the URL it points to
+2. Extract any RSVP links, signup links, or registration URLs mentioned in the text
+3. Extract contact email addresses
+4. Extract contact phone numbers
+5. Extract any other external URLs (Google Forms, Eventbrite, etc.)
+
+Return ONLY a JSON object with this exact structure:
+{
+  "qr_code_url": "url or null",
+  "rsvp_url": "url or null",
+  "contact_email": "email or null",
+  "contact_phone": "phone or null",
+  "external_urls": ["array of other urls or empty array"]
+}`
+              },
+              {
+                type: "image_url",
+                image_url: { url: imageData }
+              }
+            ]
+          }],
+          response_format: { type: "json_object" },
+          temperature: 0.2,
+        });
+        
+        const extracted = JSON.parse(response.choices[0].message.content);
+        return extracted;
+      } catch (error) {
+        console.error("Error extracting QR/links:", error);
+        return {
+          qr_code_url: null,
+          rsvp_url: null,
+          contact_email: null,
+          contact_phone: null,
+          external_urls: []
+        };
+      }
+    }
+
+    // Extract QR codes and links
+    const extractedLinks = await extractQRAndLinks(imageData);
+    console.log("🔍 Extracted links:", extractedLinks);
+
     // ✅ Include current date context for accurate year inference
     const today = new Date();
     const currentDate = today.toLocaleDateString("en-US", {
@@ -754,6 +809,14 @@ If a date is present, keep ISO format (YYYY-MM-DD).
     } else {
       data.location_building = "";
     }
+
+    // ✅ Add extracted QR codes and links
+    data.qr_code_url = extractedLinks.qr_code_url || null;
+    data.rsvp_url = extractedLinks.rsvp_url || extractedLinks.external_urls[0] || null; // Use first external URL as RSVP if no explicit RSVP
+    data.contact_email = extractedLinks.contact_email || null;
+    data.contact_phone = extractedLinks.contact_phone || null;
+    data.external_urls = extractedLinks.external_urls || [];
+    data.has_qr_code = !!extractedLinks.qr_code_url;
 
     // ✅ Upload image to Cloudinary
     const uploadResult = await cloudinary.uploader.upload(compressedPath, {
@@ -1002,11 +1065,41 @@ app.get("/poster/:id", async (req, res) => {
           }
         </div>
 
-        <!-- ✅ Share Button -->
-        <div class="mt-4 sm:mt-5 flex justify-center">
+        <!-- ✅ Action Buttons Section -->
+        <div class="mt-4 sm:mt-5 space-y-2">
+          ${poster.qr_code_url || poster.rsvp_url ? `
+            <a
+              href="${poster.rsvp_url || poster.qr_code_url}"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="block bg-green-600 text-white flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 rounded-xl hover:bg-green-700 transition shadow-md text-sm sm:text-base font-medium"
+            >
+              <i class="fa-solid fa-qrcode"></i> ${poster.rsvp_url ? 'RSVP / Sign Up' : 'Open QR Link'}
+            </a>
+          ` : ''}
+          
+          ${poster.contact_email ? `
+            <a
+              href="mailto:${poster.contact_email}"
+              class="block bg-blue-600 text-white flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-md text-sm sm:text-base font-medium"
+            >
+              <i class="fa-solid fa-envelope"></i> Contact Organizer
+            </a>
+          ` : ''}
+          
+          ${poster.contact_phone ? `
+            <a
+              href="tel:${poster.contact_phone.replace(/\s+/g, '')}"
+              class="block bg-indigo-600 text-white flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition shadow-md text-sm sm:text-base font-medium"
+            >
+              <i class="fa-solid fa-phone"></i> Call ${poster.contact_phone}
+            </a>
+          ` : ''}
+          
+          <!-- Share Button -->
           <button
             onclick="openShare()"
-            class="bg-primary text-white flex items-center gap-2 px-5 sm:px-6 py-2 rounded-xl hover:bg-indigo-700 transition shadow-md text-sm sm:text-base"
+            class="w-full bg-primary text-white flex items-center justify-center gap-2 px-5 sm:px-6 py-2 rounded-xl hover:bg-indigo-700 transition shadow-md text-sm sm:text-base"
           >
             <i class="fa-solid fa-share-nodes"></i> Share
           </button>
