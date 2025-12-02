@@ -7,6 +7,7 @@ const sharp = require("sharp");
 const cloudinary = require("cloudinary").v2;
 const admin = require("firebase-admin");
 const { Pinecone } = require("@pinecone-database/pinecone");
+const jsQR = require("jsqr");
 
 console.log("🚀 OPENAI KEY?:", process.env.OPENAI_API_KEY ? "YES" : "NO");
 
@@ -546,8 +547,28 @@ app.post("/extract", upload.single("poster"), async (req, res) => {
     const base64 = fs.readFileSync(compressedPath, { encoding: "base64" });
     const imageData = `data:image/jpeg;base64,${base64}`;
 
-    // ✅ Extract QR codes and links using OpenAI Vision
-    async function extractQRAndLinks(imageData) {
+    // ✅ Decode QR code from image using jsQR
+    async function decodeQRCode(imagePath) {
+      try {
+        const { data, info } = await sharp(imagePath)
+          .greyscale()
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        
+        const code = jsQR(data, info.width, info.height);
+        if (code) {
+          console.log("✅ QR code decoded:", code.data);
+          return code.data;
+        }
+        return null;
+      } catch (error) {
+        console.error("Error decoding QR code:", error);
+        return null;
+      }
+    }
+
+    // ✅ Extract QR codes and links using OpenAI Vision + jsQR
+    async function extractQRAndLinks(imageData, qrCodeUrl) {
       try {
         const openai = getOpenAI();
         const response = await openai.chat.completions.create({
@@ -558,15 +579,21 @@ app.post("/extract", upload.single("poster"), async (req, res) => {
               {
                 type: "text",
                 text: `This is a campus event poster. Extract the following information:
-1. If there's a QR code visible, extract the URL it points to
-2. Extract any RSVP links, signup links, or registration URLs mentioned in the text
-3. Extract contact email addresses
-4. Extract contact phone numbers
-5. Extract any other external URLs (Google Forms, Eventbrite, etc.)
+1. Look for ANY URLs mentioned in the text (like "go.unc.edu/cite", "bit.ly/...", "forms.gle/...", etc.) - these are often RSVP or signup links
+2. Extract ALL email addresses you see anywhere on the poster (even if in a "Contact" section or footer)
+3. Extract phone numbers
+4. Look for phrases like "scan QR code", "use QR code", "visit", "go to", "sign up at" and extract the associated URL
+5. Extract any other external URLs (Google Forms, Eventbrite, Eventbrite, registration links, etc.)
+
+IMPORTANT: 
+- Extract URLs even if they're written as plain text (not clickable)
+- Look in ALL sections: main text, contact info, footer, instructions
+- If you see "go.unc.edu/cite" or similar, extract it as rsvp_url
+- Extract emails from contact sections, study contact info, IRB info, etc.
 
 Return ONLY a JSON object with this exact structure:
 {
-  "qr_code_url": "url or null",
+  "qr_code_url": "${qrCodeUrl || "null"}",
   "rsvp_url": "url or null",
   "contact_email": "email or null",
   "contact_phone": "phone or null",
@@ -584,11 +611,15 @@ Return ONLY a JSON object with this exact structure:
         });
         
         const extracted = JSON.parse(response.choices[0].message.content);
+        // Use decoded QR code URL if available
+        if (qrCodeUrl && !extracted.qr_code_url) {
+          extracted.qr_code_url = qrCodeUrl;
+        }
         return extracted;
       } catch (error) {
         console.error("Error extracting QR/links:", error);
         return {
-          qr_code_url: null,
+          qr_code_url: qrCodeUrl || null,
           rsvp_url: null,
           contact_email: null,
           contact_phone: null,
@@ -597,8 +628,11 @@ Return ONLY a JSON object with this exact structure:
       }
     }
 
-    // Extract QR codes and links
-    const extractedLinks = await extractQRAndLinks(imageData);
+    // First, try to decode QR code directly from image
+    const decodedQRUrl = await decodeQRCode(compressedPath);
+    
+    // Then extract all links and contact info using OpenAI Vision
+    const extractedLinks = await extractQRAndLinks(imageData, decodedQRUrl);
     console.log("🔍 Extracted links:", extractedLinks);
 
     // ✅ Include current date context for accurate year inference
