@@ -12,7 +12,6 @@ const jsQR = require("jsqr");
 console.log("🚀 OPENAI KEY?:", process.env.OPENAI_API_KEY ? "YES" : "NO");
 
 const fs = require("fs");
-const path = require("path");
 if (fs.existsSync(".env")) {
   require("dotenv").config();
 }
@@ -44,9 +43,7 @@ app.use(cors({
   },
   credentials: true
 }));
-// Serve static files from parent directory (where frontend/ is located)
-// This works whether server runs from root or backend/ directory
-app.use(express.static(path.join(__dirname, "..")));
+app.use(express.static("."));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));   // ⭐️ REQUIRED FOR TWILIO
 
