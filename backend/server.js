@@ -43,7 +43,9 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.static("."));
+// Serve static files - use path.join to work regardless of working directory
+const path = require("path");
+app.use(express.static(path.join(__dirname, "..")));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));   // ⭐️ REQUIRED FOR TWILIO
 
