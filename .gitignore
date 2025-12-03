@@ -7,6 +7,7 @@
 # Firebase service account
 *.json
 !package.json
+!vercel.json
 
 # Node dependencies
 node_modules/
