@@ -47,7 +47,20 @@ app.use(express.static("."));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));   // ⭐️ REQUIRED FOR TWILIO
 
-const upload = multer({ dest: "uploads/" });
+// Configure multer to accept image files including HEIC
+const upload = multer({ 
+  dest: "uploads/",
+  fileFilter: (req, file, cb) => {
+    // Allow all image types including HEIC
+    if (file.mimetype.startsWith('image/') || 
+        file.originalname.toLowerCase().endsWith('.heic') ||
+        file.originalname.toLowerCase().endsWith('.heif')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
 
 function getOpenAI() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -536,9 +549,15 @@ app.post("/extract", upload.single("poster"), async (req, res) => {
   try {
     const { school } = req.body; // ✅ Capture school from the upload form
 
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
     const filePath = req.file.path;
     const compressedPath = `${filePath}-small.jpg`;
 
+    // Sharp automatically handles HEIC files and converts them
+    // If HEIC support is not available, it will throw an error which we catch below
     await sharp(filePath)
       .resize({ width: 800 })
       .jpeg({ quality: 70 })
